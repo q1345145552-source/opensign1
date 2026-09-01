@@ -25,7 +25,7 @@ i18n
     interpolation: {
       escapeValue: false // Not needed for react as it escapes by default
     },
-    whitelist: ["en", "es", "fr", "it", "de", "hi", "kr", "zh-CN"] // List of allowed languages
+    supportedLngs: ["en", "zh-CN"] // Only English and Simplified Chinese are supported
   });
 
 export default i18n;

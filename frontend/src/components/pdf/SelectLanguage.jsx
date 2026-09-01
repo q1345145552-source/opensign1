@@ -6,12 +6,6 @@ function SelectLanguage(props) {
   const { i18n } = useTranslation();
   const languages = [
     { value: "en", text: "English" }, //english
-    { value: "es", text: "Española" }, //spanish
-    { value: "fr", text: "Français" }, //french
-    { value: "it", text: "Italiano" }, //italian
-    { value: "de", text: "Deutsch" }, //german
-    { value: "hi", text: "हिन्दी" }, //hindi
-    { value: "kr", text: "한국어" }, //korean
     { value: "zh-CN", text: "简体中文" } //simplified chinese
   ];
   const defaultLanguage = i18next.language || "en";
