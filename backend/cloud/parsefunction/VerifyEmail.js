@@ -3,9 +3,19 @@ export default async function VerifyEmail(request) {
     if (!request?.user) {
       throw new Parse.Error(Parse.Error.INVALID_SESSION_TOKEN, 'User is not authenticated.');
     } else {
-      let otpN = request.params.otp;
-      let otp = parseInt(otpN);
-      let email = request.params.email;
+      const otp = parseInt(request.params.otp);
+      const email = String(request.params.email || '')
+        .trim()
+        .toLowerCase();
+      const authenticatedEmail = String(request.user.get('email') || '')
+        .trim()
+        .toLowerCase();
+
+      if (!email || email !== authenticatedEmail) {
+        const error = new Error('Email does not belong to the authenticated user.');
+        error.code = 400;
+        throw error;
+      }
 
       //checking otp is correct or not which already save in defaultdata_Otp class
       const checkOtp = new Parse.Query('defaultdata_Otp');
@@ -13,10 +23,13 @@ export default async function VerifyEmail(request) {
       checkOtp.equalTo('OTP', otp);
 
       const res = await checkOtp.first({ useMasterKey: true });
-      if (res) {
+      const expiresAt = res?.get('ExpiresAt');
+      const isExpired = !(expiresAt instanceof Date) || expiresAt.getTime() <= Date.now();
+      if (res && !isExpired) {
         // Fetch the user by their objectId
         const isEmailVerified = request?.user?.get('emailVerified');
         if (isEmailVerified) {
+          await res.destroy({ useMasterKey: true });
           return { message: 'Email is already verified.' };
         } else {
           const userQuery = new Parse.Query(Parse.User);
@@ -24,11 +37,14 @@ export default async function VerifyEmail(request) {
             sessionToken: request?.user.getSessionToken(),
           });
 
+          // Consume the OTP before updating the user so it cannot be reused.
+          await res.destroy({ useMasterKey: true });
+
           // Update the emailVerified field to true
           user.set('emailVerified', true);
           // Save the user object
-          const res = await user.save(null, { useMasterKey: true });
-          if (res) {
+          const saveResult = await user.save(null, { useMasterKey: true });
+          if (saveResult) {
             return { message: 'Email is verified.' };
           } else {
             const error = new Error('Something went wrong, please try again later!');
@@ -37,7 +53,10 @@ export default async function VerifyEmail(request) {
           }
         }
       } else {
-        const error = new Error('OTP is invalid.');
+        if (res) {
+          await res.destroy({ useMasterKey: true });
+        }
+        const error = new Error('OTP is invalid or expired.');
         error.code = 400; // Set the error code (e.g., 400 for bad request)
         throw error;
       }

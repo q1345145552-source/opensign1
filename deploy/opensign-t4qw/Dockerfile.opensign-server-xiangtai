@@ -1,0 +1,7 @@
+FROM opensign/opensignserver:main@sha256:cadfcaaa20bf40272aed43c91314362c1dac034b2a4651f50e5288d01c2b434d
+
+# Keep Chinese text available when office documents are converted to PDF.
+RUN apt-get update && apt-get install -y -qq fonts-noto-cjk && fc-cache -f && rm -rf /var/lib/apt/lists/*
+
+COPY backend/cloud/parsefunction/SendMailOTPv1.js /usr/src/app/cloud/parsefunction/SendMailOTPv1.js
+COPY backend/cloud/parsefunction/VerifyEmail.js /usr/src/app/cloud/parsefunction/VerifyEmail.js

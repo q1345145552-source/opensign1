@@ -1,4 +1,4 @@
-import { appName, smtpenable, updateMailCount } from '../../Utils.js';
+import { smtpenable, updateMailCount } from '../../Utils.js';
 async function getDocument(docId) {
   try {
     const query = new Parse.Query('contracts_Document');
@@ -19,22 +19,23 @@ async function getDocument(docId) {
 }
 async function sendMailOTPv1(request) {
   try {
-    let code = Math.floor(1000 + Math.random() * 9000);
-    let email = request.params.email;
-    let TenantId = request.params.TenantId ? request.params.TenantId : undefined;
-    const AppName = appName;
-
+    const code = Math.floor(1000 + Math.random() * 9000);
+    const email = String(request.params.email || '')
+      .trim()
+      .toLowerCase();
+    const TenantId = request.params.TenantId ? request.params.TenantId : undefined;
     if (email) {
-      const recipient = request.params.email;
+      const recipient = email;
+      const emailBrandName = '湘泰出海';
       const mailsender = smtpenable ? process.env.SMTP_USER_EMAIL : process.env.MAILGUN_SENDER;
       try {
         await Parse.Cloud.sendEmail({
-          sender: AppName + ' <' + mailsender + '>',
+          sender: emailBrandName + ' <' + mailsender + '>',
           recipient: recipient,
-          subject: `Your ${AppName} OTP`,
-          text: 'otp email',
+          subject: '你的湘泰出海验证码是',
+          text: `你的${emailBrandName}验证码是：${code}`,
           html:
-            `<html><head><meta http-equiv='Content-Type' content='text/html;charset=UTF-8' /></head><body><div style='background-color:#f5f5f5;padding:20px'><div style='background-color:white;'><div style='background-color:red;padding:2px;font-family:system-ui;background-color:#47a3ad;'><p style='font-size:20px;font-weight:400;color:white;padding-left:20px;'>OTP Verification</p></div><div style='padding:20px;'><p style='font-family:system-ui;font-size:14px;'>Your OTP for ${AppName} verification is:</p><p style='text-decoration:none;font-weight:bolder;color:blue;font-size:45px;margin:20px;'>` +
+            `<html><head><meta http-equiv='Content-Type' content='text/html;charset=UTF-8' /></head><body><div style='background-color:#f5f5f5;padding:20px'><div style='background-color:white;'><div style='background-color:red;padding:2px;font-family:system-ui;background-color:#47a3ad;'><p style='font-size:20px;font-weight:400;color:white;padding-left:20px;'>湘泰出海验证码</p></div><div style='padding:20px;'><p style='font-family:system-ui;font-size:14px;'>你的湘泰出海验证码是：</p><p style='text-decoration:none;font-weight:bolder;color:blue;font-size:45px;margin:20px;'>` +
             code +
             '</p></div></div></div></body></html>',
         });
@@ -51,24 +52,16 @@ async function sendMailOTPv1(request) {
       const tempOtp = new Parse.Query('defaultdata_Otp');
       tempOtp.equalTo('Email', email);
       const resultOTP = await tempOtp.first({ useMasterKey: true });
-      // console.log('resultOTP', resultOTP);
-      if (resultOTP !== undefined) {
-        const updateOtpQuery = new Parse.Query('defaultdata_Otp');
-        const updateOtp = await updateOtpQuery.get(resultOTP.id, {
-          useMasterKey: true,
-        });
-        updateOtp.set('OTP', code);
-        updateOtp.save(null, { useMasterKey: true });
-        //   console.log("update otp Res in tempSendOtp ", updateRes);
-      } else {
+      let otpRecord = resultOTP;
+      if (!otpRecord) {
         const otpClass = Parse.Object.extend('defaultdata_Otp');
-        const newOtpQuery = new otpClass();
-        newOtpQuery.set('OTP', code);
-        newOtpQuery.set('Email', email);
-        newOtpQuery.set('TenantId', TenantId);
-        await newOtpQuery.save(null, { useMasterKey: true });
-        //   console.log("new otp Res in tempSendOtp ", newRes);
+        otpRecord = new otpClass();
       }
+      otpRecord.set('OTP', code);
+      otpRecord.set('Email', email);
+      otpRecord.set('TenantId', TenantId);
+      otpRecord.set('ExpiresAt', new Date(Date.now() + 10 * 60 * 1000));
+      await otpRecord.save(null, { useMasterKey: true });
       return 'Otp send';
     } else {
       return 'Please Enter valid email';
