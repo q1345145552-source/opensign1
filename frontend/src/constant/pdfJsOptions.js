@@ -1,15 +1,14 @@
-import { pdfjs } from "react-pdf";
-
 // PDF.js needs the CMaps (and standard font data) to decode CID-keyed fonts,
 // which is how most Chinese/CJK PDFs encode their text. Without these options
 // such text renders as garbled glyphs or empty boxes (tofu).
-const version = pdfjs.version || "5.4.296";
-const baseUrl = `https://unpkg.com/pdfjs-dist@${version}`;
-
+//
+// These files are bundled locally under /public/pdfjs so that PDF rendering
+// never depends on a third-party CDN (which is often unreachable in some
+// regions and makes Chinese text show as empty boxes).
 export const pdfJsOptions = {
-  cMapUrl: `${baseUrl}/cmaps/`,
+  cMapUrl: "/pdfjs/cmaps/",
   cMapPacked: true,
-  standardFontDataUrl: `${baseUrl}/standard_fonts/`,
+  standardFontDataUrl: "/pdfjs/standard_fonts/",
   // Fall back to the OS/browser fonts for text whose font is not embedded in
   // the PDF (covers CJK PDFs produced without embedded fonts). This only kicks
   // in for fonts with no embedded program, so embedded-font PDFs (including
