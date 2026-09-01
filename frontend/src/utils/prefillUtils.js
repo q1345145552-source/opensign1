@@ -1,0 +1,282 @@
+import { SaveFileSize } from "../constant/saveFileSize";
+import {
+  convertBase64ToFile,
+  convertPdfArrayBuffer,
+  createDocument,
+  generatePdfName,
+  embedWidgetsToDoc,
+  randomId,
+  getBase64FromUrl,
+  drawWidget,
+  getSignedUrl
+} from "../constant/Utils";
+import { PDFDocument } from "pdf-lib";
+
+export const prefillBlockColor = "transparent";
+export const prefillObj = (id) => {
+  const obj = {
+    Id: id || randomId(),
+    Role: "prefill",
+    Name: "Prefill by owner",
+    blockColor: prefillBlockColor
+  };
+
+  return obj;
+};
+//funtion to use embed prefill details in documentAdd commentMore actions
+export const handleEmbedPrefillToDoc = async (
+  prefillDetails,
+  scale,
+  pdfArrayBuffer,
+  prefillImg,
+  userId
+) => {
+  try {
+    const placeholder = prefillDetails?.placeHolder;
+    const existingPdfBytes = pdfArrayBuffer;
+    const pdfDoc = await PDFDocument.load(existingPdfBytes, {
+      ignoreEncryption: true
+    });
+    const isSignYourSelfFlow = false;
+    try {
+      const pdfBase64 = await embedWidgetsToDoc(
+        placeholder,
+        pdfDoc,
+        isSignYourSelfFlow,
+        scale,
+        prefillImg
+      );
+      if (pdfBase64?.error) {
+        return { error: pdfBase64.error };
+      }
+      const pdfName = generatePdfName(16);
+      const pdfUrl = await convertBase64ToFile(pdfName, pdfBase64);
+      const tenantId = localStorage.getItem("TenantId");
+      const buffer = atob(pdfBase64);
+      SaveFileSize(buffer.length, pdfUrl, tenantId, userId);
+      return pdfUrl;
+    } catch (err) {
+      console.log("error to convertBase64ToFile in placeholder flow", err);
+      alert(err?.message);
+    }
+  } catch (err) {
+    console.log("error in handleEmbedPrefillToDoc function", err);
+  }
+};
+//this function is used to open modal to show signers list
+export const handleDisplaySignerList = async (
+  xyPosition,
+  signers,
+  setForms,
+  isHideSigner
+) => {
+  //'isHideSigner' is used to check should signer attach dropdown display or not
+  if (!isHideSigner) {
+    // if any role does not attach signer then show signers list attach to role in modal
+    const filterPrefill = xyPosition?.filter((x) => x.Role !== "prefill");
+    let users = [];
+    filterPrefill?.forEach((element) => {
+      let label = "";
+      const signerData = signers?.find(
+        (x) => element.signerObjId && element.signerObjId === x.objectId
+      );
+      if (signerData) {
+        label = `${signerData.Name}<${signerData.Email}>`;
+      }
+      users = [
+        ...users,
+        {
+          value: element?.signerObjId || element?.Id,
+          label: label || "",
+          role: element.Role
+        }
+      ];
+    });
+    setForms(users);
+  }
+};
+
+export const isValidPrefill = (prefillData) => {
+  const getPlaceholder = prefillData?.placeHolder;
+  if (getPlaceholder) {
+    const uniqueWidgets = getPlaceholder
+      .flatMap((page) => page.pos)
+      .filter(
+        (item, index, self) =>
+          index ===
+          self.findIndex((x) => x?.options?.name === item?.options?.name)
+      );
+    // Find objects with empty response of prefill widgets
+    const emptyResponseObjects = uniqueWidgets.filter(
+      (item) =>
+        !item?.options?.defaultValue &&
+        !item?.options?.response &&
+        item?.options?.status === "required"
+    );
+    if (emptyResponseObjects.length > 0) {
+      const res = {
+        status: "unfilled",
+        emptyResponseObjects: emptyResponseObjects
+      };
+      return res;
+    }
+  }
+};
+
+//function to use create document from templateAdd commentMore actions
+export const handleCheckPrefillCreateDoc = async (
+  xyPosition,
+  signers,
+  setIsPrefillModal,
+  scale,
+  updatedPdfUrl,
+  pdfDetails,
+  prefillImg,
+  userId
+) => {
+  let url;
+  let pdfArrayBuffer;
+  try {
+    url = await getSignedUrl(updatedPdfUrl, "", pdfDetails?.[0]?.objectId);
+    pdfArrayBuffer = await convertPdfArrayBuffer(url);
+    if (pdfArrayBuffer === "Error") {
+      return { status: "error", message: "failed-pdf-for-prefill-processing" };
+    }
+  } catch (e) {
+    return { status: "error", message: "failed-pdf-for-prefill-processing" };
+  }
+  const prefillData = xyPosition.find((x) => x.Role === "prefill");
+  if (prefillData) {
+    const res = isValidPrefill(prefillData);
+    if (res) return res;
+  }
+  const removePrefill = xyPosition.filter((data) => data.Role !== "prefill");
+  const isAllAttachSigner =
+    removePrefill.length > 0 && removePrefill.every((x) => x?.signerObjId);
+  if (isAllAttachSigner) {
+    setIsPrefillModal(false);
+    const prefillDetails = xyPosition.find((data) => data.Role === "prefill");
+    let signedUrl;
+    //condition to check prefill widgets exit or not if exist then embed prefill widgets value in template and then create document
+    if (prefillDetails) {
+      signedUrl = await handleEmbedPrefillToDoc(
+        prefillDetails,
+        scale,
+        pdfArrayBuffer,
+        prefillImg,
+        userId
+      );
+    } else {
+      signedUrl = url;
+    }
+    const isSendDoc = true;
+    const res = await createDocument(
+      pdfDetails,
+      xyPosition,
+      signers,
+      signedUrl || updatedPdfUrl,
+      isSendDoc
+    );
+    if (res?.status === "success" || res?.status === "error") {
+      return res;
+    }
+  } else {
+    const res = { status: "unattach signer" };
+    return res;
+  }
+};
+
+//function is used to save prefill image base64 in local to display on document/template
+export const savePrefillImg = async (Placeholders) => {
+  const prefillData = Placeholders?.find((x) => x.Role === "prefill");
+  if (prefillData) {
+    const allImageFields = prefillData?.placeHolder.flatMap((p) =>
+      p.pos.filter((item) => item.type === "image" || item.type === drawWidget)
+    );
+    const hasImageType = allImageFields.some(
+      (p) => p.type === "image" || p.type === drawWidget
+    );
+    if (hasImageType) {
+      const imgArr = [];
+      for (const ph of prefillData?.placeHolder || []) {
+        for (const pos of ph?.pos || []) {
+          if (
+            (pos?.type === "image" || pos?.type === drawWidget) &&
+            pos?.options?.response
+          ) {
+            const addSuffix = true;
+            const base64 = await getBase64FromUrl(
+              pos?.options?.response,
+              addSuffix
+            );
+            imgArr.push({ id: pos?.key, base64: base64 });
+          } else if (pos?.type === "image" || pos?.type === drawWidget) {
+            imgArr.push({ id: pos?.key, base64: "" });
+          }
+        }
+      }
+
+      return imgArr;
+    }
+  }
+};
+
+//function is used to get signers list for showing in modal
+export const handleSignersList = (item) => {
+  const removePrefill = item?.Placeholders?.filter((x) => x.Role !== "prefill");
+  let updatedSigners = removePrefill.map((x) => {
+    let matchingSigner = item?.Signers?.find(
+      (y) => x.signerObjId && x.signerObjId === y.objectId
+    );
+    if (matchingSigner) {
+      return {
+        ...matchingSigner,
+        Role: x.Role ? x.Role : matchingSigner.Role,
+        Id: x.Id,
+        blockColor: x.blockColor
+      };
+    } else {
+      return {
+        Role: x.Role,
+        Id: x.Id,
+        blockColor: x.blockColor
+      };
+    }
+  });
+  return updatedSigners;
+};
+
+export const normalizeKey = (value) => value?.trim()?.toLowerCase() || "";
+
+export const handleUpdateTemplateLinks = async (
+  xyPosition,
+  templateId,
+  mode
+) => {
+  //save prefill widgets updated response in contracts_templateLinks class instead of contracts_Template
+  //so that prefill values do not overwrite the original template
+  try {
+    const getPrefillData = xyPosition?.find((x) => x?.Role === "prefill");
+    if (getPrefillData) {
+      const prefillPlaceholder = getPrefillData?.placeHolder || [];
+      const query = new Parse.Query("contracts_templateLinks");
+      const templatePtr = {
+        __type: "Pointer",
+        className: "contracts_Template",
+        objectId: templateId
+      };
+      query.equalTo("TemplatePtr", templatePtr);
+      query.equalTo("Type", mode);
+      let templateLink = await query.first();
+      if (!templateLink) {
+        templateLink = new Parse.Object("contracts_templateLinks");
+        templateLink.set("Type", mode);
+        templateLink.set("TemplatePtr", templatePtr);
+      }
+      templateLink.set("Placeholders", prefillPlaceholder);
+      await templateLink.save();
+    }
+  } catch (e) {
+    console.error("handleUpdateTemplate error", e);
+  }
+};

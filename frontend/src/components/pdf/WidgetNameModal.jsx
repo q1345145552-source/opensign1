@@ -1,0 +1,484 @@
+import { useEffect, useMemo, useState } from "react";
+import ModalUi from "../../primitives/ModalUi";
+import "../../styles/AddUser.css";
+import RegexParser from "regex-parser";
+import {
+  signatureTypes,
+  textInputWidget,
+  cellsWidget,
+  textWidget
+} from "../../constant/Utils";
+import {
+  getRegexForType,
+  widgetNamesArr
+} from "../../utils";
+import { fontColorArr, fontsizeArr } from "../../constant/Utils";
+import { useTranslation } from "react-i18next";
+
+const WidgetNameModal = (props) => {
+  const { t } = useTranslation();
+  const signTypes = props?.signatureType || signatureTypes;
+  const [lastSubmittedName, setLastSubmittedName] = useState("");
+  const [formdata, setFormdata] = useState({
+    name: "",
+    defaultValue: "",
+    status: "required",
+    hint: "",
+    textvalidate: "",
+    isReadOnly: false,
+    cellCount: 5,
+  });
+  const [rotation, setRotation] = useState(0);
+  const [isValid, setIsValid] = useState(true);
+  const statusArr = ["Required", "Optional"];
+  const [signatureType, setSignatureType] = useState([]);
+  const type = props?.defaultdata?.type;
+  const isCellWidget = useMemo(() => type === cellsWidget, [type]);
+  const isSignOrInitials = useMemo(
+    () => ["signature", "initials"].includes(type),
+    [type]
+  );
+  const showFontControls = useMemo(
+    () =>
+      [
+        textInputWidget,
+        textWidget,
+        cellsWidget,
+        "name",
+        "company",
+        "job title",
+        "email"
+      ].includes(props.defaultdata?.type),
+    [type]
+  );
+
+
+  const handleHintPlaceholder = () => {
+    const type = props.defaultdata?.type;
+
+    if (type === "signature") {
+      return t("draw-signature");
+    } else if (type === "stamp" || type === "image") {
+      return type === "stamp" ? t("upload-stamp-image") : t("upload-image");
+    } else if (type === "initials") {
+      return t("draw-initials");
+    } else if (type === textInputWidget) {
+      return t("enter-text");
+    } else {
+      return t("enter-widgettype", { widgetType: type });
+    }
+  };
+  useEffect(() => {
+    if (props.defaultdata) {
+      setFormdata({
+        name: props.defaultdata?.options?.name || "",
+        defaultValue: props.defaultdata?.options?.defaultValue || "",
+        status: props.defaultdata?.options?.status || "required",
+        hint: props.defaultdata?.options?.hint || "",
+        textvalidate:
+          props.defaultdata?.options?.validation?.type === "regex"
+            ? props.defaultdata?.options?.validation?.pattern
+            : props.defaultdata?.options?.validation?.type || "",
+        isReadOnly: props.defaultdata?.options?.isReadOnly || false,
+        cellCount: props.defaultdata?.options?.cellCount || 5,
+      });
+      setLastSubmittedName(props.defaultdata?.options?.name || "");
+      setRotation(props.defaultdata?.options?.rotation || 0);
+    } else {
+      setFormdata({
+        ...formdata,
+        name: props.defaultdata?.options?.name || "",
+        cellCount: props.defaultdata?.options?.cellCount || 5,
+      });
+      setLastSubmittedName(props.defaultdata?.options?.name || "");
+      setRotation(props.defaultdata?.options?.rotation || 0);
+    }
+
+    if (signTypes.length > 0) {
+      const defaultSignatureType = signTypes || [];
+      setSignatureType(defaultSignatureType);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.defaultdata]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (props.handleData) {
+      const widgetNames = widgetNamesArr(
+        props.widgetsSource,
+        props?.activeSignerId
+      );
+      if (lastSubmittedName && lastSubmittedName !== formdata.name) {
+        const widgetNameExist = widgetNames?.find(
+          (widget) => widget === formdata.name
+        );
+        if (widgetNameExist) {
+          alert(t("duplicate-widget-name-error"));
+          return;
+        }
+      }
+      if (isSignOrInitials) {
+        const enabledSignTypes = signatureType?.filter((x) => x.enabled);
+        const isDefaultSignTypeOnly =
+          enabledSignTypes?.length === 1 &&
+          enabledSignTypes[0]?.name === "default";
+        if (enabledSignTypes.length === 0) {
+          alert(t("at-least-one-signature-type"));
+        } else if (isDefaultSignTypeOnly) {
+          alert(t("expect-default-one-signature-type"));
+        } else {
+          const data = { ...formdata, signatureType, rotation };
+          props.handleData(data, props.defaultdata?.type);
+        }
+      } else {
+
+        const isTextInput = [
+          textInputWidget,
+          cellsWidget,
+        ].includes(props.defaultdata?.type);
+        const { isReadOnly, defaultValue, status } = formdata;
+        // If it’s a text‐input widget, enforce that read-only fields have
+        // either a defaultValue or an "optional" status.
+        if (isTextInput) {
+          const readOnlyWithoutValue =
+            isReadOnly && !defaultValue && status !== "optional";
+          if (readOnlyWithoutValue) {
+            alert(t("readonly-error", { widgetName: props.defaultdata?.type }));
+            return;
+          }
+        }
+        let payload = formdata;
+        props.handleData(payload);
+      }
+      setFormdata({
+        isReadOnly: false,
+        name: "",
+        defaultValue: "",
+        status: "required",
+        hint: "",
+        textvalidate: "",
+        cellCount: 5,
+      });
+      setRotation(0);
+      setSignatureType(signTypes);
+    }
+  };
+  const handleChange = (e) => {
+    if (e) {
+      setFormdata({ ...formdata, [e.target.name]: e.target.value });
+    } else {
+      setFormdata({ ...formdata, textvalidate: "" });
+    }
+  };
+
+  const handleChangeValidateInput = (e) => {
+    if (e) {
+      if (e.target.value === "ssn") {
+        setFormdata({
+          ...formdata,
+          [e.target.name]: e.target.value,
+          hint: "xxx-xx-xxxx",
+          cellCount: 11
+        });
+      } else {
+        setFormdata({ ...formdata, [e.target.name]: e.target.value });
+      }
+    } else {
+      setFormdata({ ...formdata, textvalidate: "" });
+    }
+  };
+
+  const handledefaultChange = (e) => {
+    if (formdata.textvalidate) {
+      const regexObject = RegexParser(getRegexForType(formdata.textvalidate));
+      const isValidate = regexObject?.test(e.target.value);
+      setIsValid(isValidate);
+    } else {
+      setIsValid(true);
+    }
+
+    const val = isCellWidget
+      ? e.target.value.slice(0, formdata.cellCount)
+      : e.target.value;
+
+    setFormdata({ ...formdata, [e.target.name]: val });
+  };
+
+
+  const handleCheckboxChange = (index) => {
+    // Update the state with the modified array
+    setSignatureType((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, enabled: !item.enabled } : item
+      )
+    );
+  };
+
+  return (
+    <ModalUi
+      isOpen={props.isOpen}
+      handleClose={props.handleClose && props.handleClose}
+      title={isSignOrInitials ? t("signature-setting") : t("widget-info")}
+    >
+      <form
+        onSubmit={handleSubmit}
+        className={`${
+          [textInputWidget, cellsWidget].includes(props.defaultdata?.type)
+            ? "pt-0"
+            : isSignOrInitials
+              ? "pt-2"
+              : ""
+        } p-[20px] text-base-content`}
+      >
+        {!isSignOrInitials && (
+          <div className="mb-[0.75rem] text-[13px]">
+            <label htmlFor="name">
+              {t("name")}
+              <span className="text-[red]"> *</span>
+            </label>
+            <input
+              className="op-input op-input-bordered op-input-sm focus:outline-none hover:border-base-content w-full text-xs"
+              name="name"
+              value={formdata.name}
+              onChange={(e) => handleChange(e)}
+              onInvalid={(e) => e.target.setCustomValidity(t("input-required"))}
+              onInput={(e) => e.target.setCustomValidity("")}
+              required
+            />
+          </div>
+        )}
+        {isCellWidget && (
+          <div className="mb-[0.75rem] text-[13px]">
+            <label htmlFor="cellCount">{t("cell-count")}</label>
+            <input
+              className="op-input op-input-bordered op-input-sm focus:outline-none hover:border-base-content w-full text-xs"
+              type="number"
+              min="1"
+              name="cellCount"
+              value={formdata.cellCount}
+              onChange={(e) => handleChange(e)}
+              required
+            />
+          </div>
+        )}
+        {[
+          textInputWidget,
+          cellsWidget,
+        ].includes(props.defaultdata?.type) &&
+          props?.roleName !== "prefill" && (
+            <>
+              <div className="mb-[0.75rem]">
+                <label htmlFor="name" className="text-[13px]">
+                  {t("default-value")}
+                </label>
+                <input
+                  className="op-input op-input-bordered op-input-sm focus:outline-none hover:border-base-content w-full text-xs"
+                  name="defaultValue"
+                  value={formdata.defaultValue}
+                  onChange={(e) => handledefaultChange(e)}
+                  autoComplete="off"
+                  maxLength={isCellWidget ? formdata.cellCount : undefined}
+                  onBlur={() => {
+                    if (isValid === false) {
+                      setFormdata({ ...formdata, defaultValue: "" });
+                      setIsValid(true);
+                    }
+                  }}
+                />
+                {isValid === false && (
+                  <div
+                    className="warning defaultvalueWarning"
+                    style={{ fontSize: 12 }}
+                  >
+                    <i
+                      className="fa-light fa-exclamation-circle text-[15px] mr-1"
+                      style={{ color: "#fab005" }}
+                    ></i>
+                    {t("invalid-default-value")}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        {!props?.isSelfSign && !isSignOrInitials && (
+          <div className={showFontControls ? "mb-[0.5rem]" : "mb-[0.75rem]"}>
+            <div className="flex flex-row gap-[10px] mb-[0.5rem]">
+              {statusArr.map((data, ind) => {
+                return (
+                  <div
+                    key={ind}
+                    className="flex flex-row gap-[5px] items-center"
+                  >
+                    <input
+                      className="mr-[2px] op-radio op-radio-xs"
+                      type="radio"
+                      name="status"
+                      onChange={() =>
+                        setFormdata({
+                          ...formdata,
+                          status: data.toLowerCase()
+                        })
+                      }
+                      checked={
+                        formdata.status.toLowerCase() === data.toLowerCase()
+                      }
+                    />
+                    <div className="text-[13px] font-medium">
+                      {t(`widget-status.${data}`)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {[
+              textInputWidget,
+              cellsWidget,
+            ].includes(props.defaultdata?.type) && (
+              <div className="flex items-center">
+                <input
+                  id="isReadOnly"
+                  name="isReadOnly"
+                  type="checkbox"
+                  checked={formdata.isReadOnly}
+                  className="op-checkbox op-checkbox-xs"
+                  onChange={() =>
+                    setFormdata((prev) => ({
+                      ...formdata,
+                      isReadOnly: !prev.isReadOnly
+                    }))
+                  }
+                />
+                <label
+                  className="ml-1.5 mb-0 capitalize text-[13px]"
+                  htmlFor="isreadonly"
+                >
+                  {t("read-only")}
+                </label>
+              </div>
+            )}
+          </div>
+        )}
+        {isSignOrInitials && (
+          <div className="mb-[0.75rem]">
+            <label htmlFor="signaturetype" className="text-[14px] mb-[0.7rem]">
+              {t("allowed-signature-types")}
+            </label>
+            <div className="ml-[7px] flex flex-col md:flex-row gap-[10px] mb-[0.7rem]">
+              {signatureType.map((type, i) => {
+                return (
+                  <div key={i} className="flex flex-row gap-[5px] items-center">
+                    <input
+                      className="mr-[2px] op-checkbox op-checkbox-xs"
+                      type="checkbox"
+                      name="signaturetype"
+                      onChange={() => handleCheckboxChange(i)}
+                      checked={type.enabled}
+                    />
+                    <div
+                      className="text-[13px] font-medium hover:underline underline-offset-2 cursor-default capitalize"
+                      title={`Enabling this allow signers to ${type.name} signature`}
+                    >
+                      {type.name}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {isSignOrInitials && (
+          <div className="mb-[0.75rem]">
+            <label className="text-[14px] mb-[0.7rem]">{t("rotation")}</label>
+            <div className="ml-[7px] flex items-center gap-[10px]">
+              <select
+                className="op-select op-select-bordered op-select-sm focus:outline-none hover:border-base-content text-xs w-[120px]"
+                value={rotation}
+                onChange={(e) => setRotation(parseInt(e.target.value))}
+              >
+                <option value={0}>0°</option>
+                <option value={90}>90°</option>
+                <option value={180}>180°</option>
+                <option value={270}>270°</option>
+              </select>
+            </div>
+          </div>
+        )}
+        {!props?.isSelfSign && props?.roleName !== "prefill" && (
+          <div className="mb-[0.75rem]">
+            <label htmlFor="hint" className="text-[13px]">
+              {t("hint")}
+            </label>
+            <input
+              maxLength={40}
+              className="op-input op-input-bordered op-input-sm focus:outline-none hover:border-base-content w-full text-xs"
+              name="hint"
+              placeholder={handleHintPlaceholder()}
+              value={formdata.hint}
+              onChange={(e) => handleChange(e)}
+            />
+          </div>
+        )}
+
+        {showFontControls && (
+          <div className="flex flex-col md:flex-row md:items-center gap-3 mb-3">
+            <div className="flex items-center gap-2 ">
+              <span className="whitespace-nowrap">{t("font-size")}: </span>
+              <select
+                className="ml-[7px] w-[60%] op-select op-select-bordered op-select-sm focus:outline-none hover:border-base-content text-xs"
+                value={
+                  props.fontSize || props.defaultdata?.options?.fontSize || 12
+                }
+                onChange={(e) => props.setFontSize(parseInt(e.target.value))}
+              >
+                {fontsizeArr.map((size, ind) => {
+                  return (
+                    <option className="text-[13px]" value={size} key={ind}>
+                      {size}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+            <div className="flex items-center">
+              <span>{t("color")}: </span>
+              <select
+                value={
+                  props.fontColor ||
+                  props.defaultdata?.options?.fontColor ||
+                  "black"
+                }
+                onChange={(e) => props.setFontColor(e.target.value)}
+                className="ml-[33px] md:ml-4 w-[65%] md:w-[full] op-select op-select-bordered op-select-sm focus:outline-none hover:border-base-content text-xs"
+              >
+                {fontColorArr.map((color, ind) => {
+                  return (
+                    <option value={color} key={ind}>
+                      {t(`color-type.${color}`)}
+                    </option>
+                  );
+                })}
+              </select>
+              <span
+                style={{
+                  background:
+                    props.fontColor ||
+                    props.defaultdata?.options?.fontColor ||
+                    "black"
+                }}
+                className="w-5 h-[19px] ml-1"
+              ></span>
+            </div>
+          </div>
+        )}
+
+
+        <div className="h-[1px] w-full mb-[16px] bg-[#b7b3b3]"></div>
+        <button type="submit" className="op-btn op-btn-primary">
+          {t("save")}
+        </button>
+      </form>
+    </ModalUi>
+  );
+};
+
+export default WidgetNameModal;

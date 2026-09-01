@@ -1,0 +1,229 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: white;
+}
+
+/* Custom CSS to hide scrollbar */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+}
+.react-datepicker-popper {
+  z-index: 9999 !important;
+}
+
+@media screen and (max-width: 766px) {
+  .reactour__close-button {
+    width: 17px !important;
+    padding-left: 3px !important;
+  }
+}
+
+/* below css class replace bootstrap background color with daisy */
+.op-bg-primary {
+  @apply bg-primary;
+}
+
+.op-bg-secondary {
+  @apply bg-secondary;
+}
+
+.op-bg-info {
+  @apply bg-info;
+}
+
+.op-bg-success {
+  @apply bg-success;
+}
+
+.op-bg-warning {
+  @apply bg-warning;
+}
+
+/* below css class replace bootstrap text color with daisy */
+.op-text-primary {
+  @apply text-primary;
+}
+
+.op-text-secondary {
+  @apply text-secondary;
+}
+
+.op-text-info {
+  @apply text-info;
+}
+
+.op-text-accent {
+  @apply text-accent;
+}
+
+.op-text-success {
+  @apply text-success;
+}
+
+.op-text-warning {
+  @apply text-warning;
+}
+
+.op-border-primary {
+  @apply border-primary;
+}
+
+/* CSS for scrollbar customization */
+* {
+  scrollbar-width: thin;
+  /* For Firefox */
+  scrollbar-color: gray;
+  /* For Firefox */
+}
+
+/* For webkit-based browsers like Chrome, Safari */
+*::-webkit-scrollbar {
+  width: 5px;
+}
+
+*::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: gray;
+  border-radius: 10px;
+}
+
+.op-border-hover {
+  @apply border-gray-300 hover:border-base-content;
+}
+
+/* Note: Dark mode styling is now handled via Tailwind utilities in tailwind.config.js */
+/* You can use classes like: icon-improved, icon-muted, icon-disabled, op-btn-vscode-disabled */
+
+/* React-tour and ReactTooltip dark mode styling */
+[data-theme="opensigndark"] {
+  .op-border-hover {
+    @apply border-gray-700 hover:border-base-content;
+  }
+
+  /* for change calender icon of input date type */
+  ::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+  }
+
+  /* React-tour modal styling */
+  .reactour__popover {
+    background-color: #1f2937 !important;
+    color: #e5e7eb !important;
+    border: 1px solid #374151 !important;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
+  }
+
+  .reactour__close-button {
+    color: #e5e7eb !important;
+    background-color: #374151 !important;
+    border: 1px solid #4b5563 !important;
+  }
+
+  .reactour__close-button:hover {
+    background-color: #4b5563 !important;
+    color: #ffffff !important;
+  }
+
+
+  /* ReactTooltip styling */
+  .react-tooltip {
+    background-color: #1f2937 !important;
+    color: #e5e7eb !important;
+    border: 1px solid #374151 !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+  }
+
+  .react-tooltip.type-dark {
+    background-color: #1f2937 !important;
+    color: #e5e7eb !important;
+  }
+
+  .react-tooltip.place-top:after,
+  .react-tooltip.place-bottom:after,
+  .react-tooltip.place-left:after,
+  .react-tooltip.place-right:after {
+    border-color: #1f2937 !important;
+  }
+
+  /* Tour content improvements */
+  .reactour__badge {
+    background-color: #007acc !important;
+    color: #ffffff !important;
+  }
+
+  .reactour__popover h1,
+  .reactour__popover h2,
+  .reactour__popover h3,
+  .reactour__popover h4,
+  .reactour__popover h5,
+  .reactour__popover h6 {
+    color: #ffffff !important;
+  }
+
+  .reactour__popover p {
+    color: #e5e7eb !important;
+  }
+
+
+  /* React-datepicker dark mode styling */
+  .react-datepicker {
+    background-color: #1f2937 !important;
+    border: 1px solid #374151 !important;
+    color: #e5e7eb !important;
+  }
+
+  .react-datepicker__header {
+    background-color: #374151 !important;
+    border-bottom: 1px solid #4b5563 !important;
+    color: #e5e7eb !important;
+  }
+
+  .react-datepicker__current-month,
+  .react-datepicker__day-name {
+    color: #e5e7eb !important;
+  }
+
+  .react-datepicker__day {
+    color: #e5e7eb !important;
+  }
+
+  .react-datepicker__day:hover {
+    background-color: #4b5563 !important;
+    color: #ffffff !important;
+  }
+
+  .react-datepicker__day--selected {
+    background-color: #007acc !important;
+    color: #ffffff !important;
+  }
+
+  .react-datepicker__day--keyboard-selected {
+    background-color: #374151 !important;
+    color: #e5e7eb !important;
+  }
+
+  .react-datepicker__day--outside-month {
+    color: #6b7280 !important;
+  }
+
+  .react-datepicker__navigation {
+    color: #e5e7eb !important;
+  }
+
+  .react-datepicker__navigation:hover {
+    background-color: #4b5563 !important;
+  }
+}

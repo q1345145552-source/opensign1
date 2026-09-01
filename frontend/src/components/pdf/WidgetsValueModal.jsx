@@ -1,0 +1,2132 @@
+import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
+import ModalUi from "../../primitives/ModalUi";
+import { useTranslation } from "react-i18next";
+import { removeBackground } from "@imgly/background-removal";
+import {
+  changeDateToMomentFormat,
+  checkRegularExpress,
+  compressedFileSize,
+  getMonth,
+  getYear,
+  months,
+  onChangeInput,
+  onSaveImage,
+  onSaveSign,
+  radioButtonWidget,
+  selectCheckbox,
+  textInputWidget,
+  cellsWidget,
+  textWidget,
+  years,
+  convertTextToImg,
+  convertJpegToPng,
+  convertBase64ToFile,
+  generatePdfName,
+  getDefaultDate,
+  getDefaultFormat,
+  getBase64MimeType,
+  drawWidget,
+  getBase64FromUrl,
+  clearResponse,
+  isEmptyValue
+} from "../../constant/Utils";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+import moment from "moment";
+import {
+  setSaveSignCheckbox,
+  setDefaultSignImg,
+  setIsShowModal,
+  setMyInitial,
+  setLastIndex,
+  setScrollTriggerId,
+  setPrefillImg,
+  setPrefillImgLoad,
+  setSignatureRes,
+  setTypedSignFont,
+  setMyStamp
+} from "../../redux/reducers/widgetSlice";
+import { useDispatch, useSelector } from "react-redux";
+import Loader from "../../primitives/Loader";
+import { emailRegex } from "../../constant/const";
+import RegexParser from "regex-parser";
+import {
+  saveToMySign,
+  getInitials,
+  isValidBase64
+} from "../../utils";
+import Draw from "./tab/Draw";
+import DefaultSignature from "./tab/DefaultSignature";
+import UploadImage from "./tab/UploadImage";
+import TypeSignature from "./tab/TypeSignature";
+import PenColorComponent from "./tab/PenColorComponent";
+import TextInput from "./widgets/TextInput";
+import CellsInput from "./widgets/CellsInput";
+
+const fontOptions = [
+  { value: "Fasthand" },
+  { value: "Dancing Script" },
+  { value: "Cedarville Cursive" },
+  { value: "Delicious Handrawn" }
+  // Add more font options as needed
+];
+const textInputcls =
+  "op-input op-input-bordered op-input-sm focus:outline-none text-base-content hover:border-base-content w-full text-xs";
+const isTabCls = "bg-[#002864] text-white rounded-[15px] px-[10px] py-[4px]";
+
+function WidgetsValueModal(props) {
+  const dispatch = useDispatch();
+  const {
+    signatureResponse,
+    prefillImg,
+    defaultSignImg,
+    myInitial,
+    lastIndex: lastWidget,
+    typedSignFont,
+    saveSignCheckbox: mysign,
+    myStamp
+  } = useSelector((state) => state.widget);
+  const { t } = useTranslation();
+  const canvasRef = useRef(null);
+  const {
+    xyPosition,
+    uniqueId,
+    pageNumber,
+    currWidgetsDetails,
+    setXyPosition,
+    isSave,
+    signatureTypes,
+    penColors
+  } = props;
+  const previousWidgetRes = signatureResponse?.find(
+    (item) => item.type === currWidgetsDetails?.type
+  );
+  const [penColor, setPenColor] = useState("");
+  const [isOptional, setIsOptional] = useState(true);
+  const [isTab, setIsTab] = useState("");
+  const [textWidth, setTextWidth] = useState(0);
+  const [textHeight, setTextHeight] = useState(0);
+  const [isSignTypes, setIsSignTypes] = useState(true);
+  const [typedSignature, setTypedSignature] = useState(
+    previousWidgetRes?.value || ""
+  );
+  const [selectDate, setSelectDate] = useState({});
+  const [isLastWidget, setIsLastWidget] = useState(false);
+  const [signature, setSignature] = useState();
+  const [isImageSelect, setIsImageSelect] = useState(false);
+  const [isFinish, setIsFinish] = useState(false);
+  const [fontSelect, setFontSelect] = useState(
+    previousWidgetRes?.font || fontOptions[0].value
+  );
+  const [isSavedSign, setIsSavedSign] = useState(false);
+  const [isAutoSign, setIsAutoSign] = useState(false);
+  const [image, setImage] = useState(null);
+  const [isLoader, setIsLoader] = useState(false);
+  const [hint, setHint] = useState("");
+  const [isShowValidation, setIsShowValidation] = useState(false);
+  const [removeBgEnabled, setRemoveBgEnabled] = useState(false);
+  const [originalImage, setOriginalImage] = useState(null);
+  const [selectedCheckbox, setSelectedCheckbox] = useState(
+    currWidgetsDetails.type === "checkbox" &&
+      (currWidgetsDetails?.options?.response ||
+        currWidgetsDetails?.options?.defaultValue ||
+        [])
+  );
+  const [startDate, setStartDate] = useState(
+    currWidgetsDetails?.options?.response
+      ? getDefaultDate(
+          currWidgetsDetails?.options?.response,
+          currWidgetsDetails?.options?.validation?.format
+        )
+      : ""
+  );
+  const accesstoken = localStorage.getItem("accesstoken") || "";
+  const senderUser = localStorage.getItem(
+    `Parse/${localStorage.getItem("parseAppId")}/currentUser`
+  );
+  const kiosk_signer =
+    props?.kiosk_signer || JSON.parse(localStorage.getItem("kiosk_signer"));
+  const jsonSender = senderUser && JSON.parse(senderUser);
+  const currentUserName = jsonSender && jsonSender?.name;
+  const type = currWidgetsDetails?.type;
+  const widgetTypeTranslation = t(`widgets-name.${currWidgetsDetails?.type}`);
+
+  const getLogicMap = () => new Map();
+
+
+  const [widgetValue, setWidgetValue] = useState(() => {
+    if (currWidgetsDetails.type === "checkbox") {
+      return undefined;
+    }
+    return (
+      currWidgetsDetails?.options?.response ||
+      currWidgetsDetails?.options?.defaultValue
+    );
+  });
+  const blocked = [
+  ];
+  const blockedTab = ["mysignature", "myinitials", "myStamp"];
+  const showClearbtn =
+    (!blocked.includes(type) && !blockedTab.includes(isTab));
+  const isSignOrInitials = ["signature", "initials"].includes(
+    currWidgetsDetails?.type
+  );
+  const isImageOrStamp = ["image", "stamp"].includes(currWidgetsDetails?.type);
+  const widgetRef = useRef(null);
+  useEffect(() => {
+    const val =
+      currWidgetsDetails?.options?.response ||
+      currWidgetsDetails?.options?.defaultValue ||
+      "";
+    setWidgetValue(String(val || ""));
+  }, [currWidgetsDetails?.key, currWidgetsDetails?.options?.cellCount]);
+  useEffect(() => {
+    dispatch(setScrollTriggerId(currWidgetsDetails?.key));
+    handlePenColor();
+    return () => dispatch(setScrollTriggerId());
+  }, []);
+
+  const handlePenColor = () => {
+    if (penColors && Array.isArray(penColors) && penColors?.length > 0) {
+      setPenColor(penColors?.[0] || "blue");
+    } else {
+      setPenColor("blue");
+    }
+  };
+  // below useEffect is used to focus text widgets when user open modal
+  useEffect(() => {
+    if (widgetRef?.current) {
+      const clearFocus = setTimeout(
+        () => widgetRef?.current.focus({ preventScroll: true }),
+        10
+      );
+      return () => clearTimeout(clearFocus);
+    }
+  }, [widgetRef.current]);
+
+  useEffect(() => {
+    if (
+      [
+        "name",
+        "email",
+        "job title",
+        "company",
+        textInputWidget,
+        cellsWidget
+      ].includes(currWidgetsDetails?.type)
+    ) {
+      if (currWidgetsDetails?.options?.hint) {
+        setHint(currWidgetsDetails?.options.hint);
+      } else if (currWidgetsDetails?.options?.validation?.type) {
+        checkRegularExpress(
+          currWidgetsDetails?.options?.validation?.type,
+          setHint
+        );
+      } else {
+        setHint(currWidgetsDetails?.type);
+      }
+    }
+
+    else if (currWidgetsDetails?.type === "date") {
+      setHint(currWidgetsDetails?.options.hint || "");
+    } else if (isSignOrInitials) {
+      if (currWidgetsDetails?.signatureType) {
+        setIsTab(currWidgetsDetails?.signatureType);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currWidgetsDetails]); // Added currWidgetsDetails to dependency array for reset logic
+
+  useEffect(() => {
+    // Reset originalImage and removeBgEnabled when widget details change
+    setOriginalImage(null);
+    setRemoveBgEnabled(false);
+  }, [currWidgetsDetails?.key]);
+
+  //function to save date and format after selected new date in response field and after finish document it should embed the new selected date instead of current date
+  useEffect(() => {
+    if (currWidgetsDetails?.type === "date") {
+      const isDateChange = true;
+      const dateObj = {
+        date: startDate,
+        format: getDefaultFormat(
+          currWidgetsDetails?.options?.validation?.format
+        )
+      };
+      handleSaveDate(dateObj, isDateChange); //function to save date and format in local array
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDate]);
+  //function to save date and format on local array onchange date and onclick format
+  const handleSaveDate = (data, isDateChange) => {
+    let updateDate = data.date;
+    let date;
+    if (data?.format === "dd-MM-yyyy") {
+      date = isDateChange
+        ? moment(updateDate).format(changeDateToMomentFormat(data.format))
+        : updateDate;
+    } else {
+      //using moment package is used to change date as per the format provided in selectDate obj e.g. - MM/dd/yyyy -> 03/12/2024
+      const newDate = new Date(updateDate);
+      date = moment(newDate.getTime()).format(
+        changeDateToMomentFormat(data?.format)
+      );
+    }
+    //`onChangeInput` is used to save data related to date in a placeholder field
+    onChangeInput(
+      date,
+      currWidgetsDetails,
+      xyPosition,
+      props.index,
+      setXyPosition,
+      uniqueId,
+      false,
+      data?.format,
+      currWidgetsDetails?.options?.fontSize,
+      currWidgetsDetails?.options?.fontColor,
+      null,
+      null,
+    );
+    setSelectDate({ date: date, format: data?.format });
+  };
+  useEffect(() => {
+    handleTab();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signatureTypes]);
+  //function for image upload or update
+  const onImageChange = async (event) => {
+    if (event.target.files && event.target.files[0]) {
+      const file = event.target.files[0];
+      setOriginalImage(null); // Reset original image when a new file is selected
+      setRemoveBgEnabled(false); // Optionally reset toggle
+      // Ensure compressedFileSize calls setImage, which then triggers the useEffect for BG removal.
+      compressedFileSize(file, setImage);
+    }
+  };
+  const handleSavePrefillImg = async (drawImg) => {
+    setIsLoader(true);
+
+    try {
+      dispatch(
+        setPrefillImg({
+          id: currWidgetsDetails?.key,
+          base64: drawImg || image?.src
+        })
+      );
+      const imageName = generatePdfName(16);
+
+      const imgType = image?.imgType || getBase64MimeType(drawImg);
+      const imageUrl = await convertBase64ToFile(
+        imageName,
+        drawImg || image.src,
+        imgType
+      );
+      setIsLoader(false);
+      if (imageUrl) {
+        return imageUrl;
+      }
+    } catch (e) {
+      console.log("error in handleSavePrefillImg function ", e);
+    }
+  };
+  //function is used to save image,stamp widgets data
+  const handleSaveImage = async (signatureType) => {
+    const widgetsType = currWidgetsDetails?.type;
+    let imgUrl;
+    const isPrefill = xyPosition.some(
+      (x) => x.Id === uniqueId && x?.Role === "prefill"
+    );
+    if (isPrefill) {
+      dispatch(setPrefillImgLoad({ [currWidgetsDetails?.key]: true }));
+      imgUrl = await handleSavePrefillImg();
+    }
+    const defaultStampImg =
+      myStamp && (await convertJpegToPng(myStamp, "mystamp")); // default signature set through my signature tab
+    const defaultStampType = myStamp && getBase64MimeType(myStamp);
+    //check condition signyour-self or other flow
+    if (uniqueId) {
+      setXyPosition((prev) =>
+        prev.map((signer) => {
+          if (signer.Id !== uniqueId) return signer;
+
+          // Find the placeholder index for the page containing the current widget
+          const index = signer.placeHolder.findIndex((x) =>
+            x.pos?.some((p) => p.key === currWidgetsDetails?.key)
+          );
+          // Get updated placeholder list
+          const updatedPlaceholders = onSaveImage(
+            signatureType,
+            signer.placeHolder,
+            index,
+            currWidgetsDetails?.key,
+            image,
+            isAutoSign,
+            widgetsType,
+            isPrefill && imgUrl,
+            defaultStampImg,
+            defaultStampType
+          );
+
+          return {
+            ...signer,
+            placeHolder: updatedPlaceholders
+          };
+        })
+      );
+      dispatch(setPrefillImgLoad({}));
+
+      if (
+        ["image", "myStamp", "uploadStamp"].includes(isTab) &&
+        ["signature", "initials", "stamp"].includes(currWidgetsDetails?.type)
+      ) {
+        if (defaultStampImg || image?.src) {
+          dispatch(
+            setSignatureRes({
+              tab: isTab,
+              value: isTab === "myStamp" ? defaultStampImg : image?.src,
+              imageType:
+                isTab === "myStamp" ? defaultStampType : image?.imgType,
+              type: currWidgetsDetails?.type
+            })
+          );
+        }
+      }
+    } else {
+      const index = props?.xyPosition?.findIndex(
+        (p) => p.pageNumber === (currWidgetsDetails?.pageNumber || pageNumber)
+      );
+      const getImage = onSaveImage(
+        signatureType,
+        props?.xyPosition,
+        index,
+        currWidgetsDetails?.key,
+        image,
+        false,
+        widgetsType,
+        null,
+        defaultStampImg,
+        defaultStampType
+      );
+      setXyPosition(getImage);
+    }
+    setIsAutoSign(false);
+  };
+
+  //function is used to save draw type or initial type signature
+  const handleSaveSignature = async (
+    signType,
+    isDefaultSign,
+    width,
+    height,
+    typedSignature
+  ) => {
+    // get current click widget type
+    const widgetsType = currWidgetsDetails?.type;
+    // if there are any width and height then it will typed signature
+    const isTypeText = width && height ? true : false;
+    // final getting signature url via default select sign/default initial sign/self draw sign
+    const signUrl = isDefaultSign
+      ? isDefaultSign === "myinitials" && myInitial
+        ? await convertJpegToPng(myInitial, "myinitials")
+        : await convertJpegToPng(defaultSignImg, "mysign")
+      : signature;
+    isDefaultSign
+      ? isDefaultSign === "initials"
+        ? myInitial && (await convertJpegToPng(myInitial, "myinitials")) // default initials set through my signature tab
+        : await convertJpegToPng(defaultSignImg, "mysign") // default signature set through my signature tab
+      : signature; // signature done by user thorugh draw, upload, typed
+    let signatureImg = signUrl;
+    let imgWH = { width: width ? width : "", height: height ? height : "" };
+    setIsImageSelect(false);
+    setImage();
+    if (uniqueId) {
+      const isPrefill = xyPosition.some(
+        (x) => x.Id === uniqueId && x?.Role === "prefill"
+      );
+      if (isPrefill) {
+        dispatch(setPrefillImgLoad({ [currWidgetsDetails?.key]: true }));
+        signatureImg = await handleSavePrefillImg(signatureImg);
+      }
+      setXyPosition((prevState) =>
+        prevState.map((signer) => {
+          if (signer.Id !== uniqueId) return signer;
+
+          const placeholderIndex = signer.placeHolder.findIndex((x) =>
+            x.pos?.some((p) => p.key === currWidgetsDetails?.key)
+          );
+          const updatedPlaceholders = onSaveSign(
+            signType,
+            signer.placeHolder,
+            placeholderIndex,
+            currWidgetsDetails?.key,
+            signatureImg,
+            imgWH,
+            isTypeText,
+            typedSignature,
+            isAutoSign,
+            widgetsType,
+            fontSelect,
+            penColor
+          );
+          return {
+            ...signer,
+            placeHolder: updatedPlaceholders
+          };
+        })
+      );
+      dispatch(setPrefillImgLoad({}));
+      if (
+        ["signature", "initials"].includes(currWidgetsDetails?.type) &&
+        (typedSignature || signatureImg)
+      ) {
+        dispatch(
+          setSignatureRes({
+            tab: isTab,
+            value: isTab === "type" ? typedSignature : signatureImg,
+            type: currWidgetsDetails?.type,
+            ...(isTab === "type" && fontSelect && { font: fontSelect })
+          })
+        );
+      }
+    } else {
+      const index = props?.xyPosition?.findIndex(
+        (p) => p.pageNumber === (currWidgetsDetails?.pageNumber || pageNumber)
+      );
+      const getUpdatePosition = onSaveSign(
+        signType,
+        props?.xyPosition,
+        index,
+        currWidgetsDetails?.key,
+        signatureImg,
+        imgWH,
+        isTypeText,
+        typedSignature,
+        false,
+        widgetsType,
+        fontSelect,
+        penColor
+      );
+      setXyPosition(getUpdatePosition);
+    }
+    setIsAutoSign(false);
+  };
+
+  //function to handle allowed tab in signature pad
+  function handleTab() {
+    if (["signature", "initials"].includes(currWidgetsDetails.type)) {
+      const signtypes = signatureTypes || [];
+      const defaultIndex = signtypes?.findIndex(
+        (x) =>
+          x.name === "default" &&
+          x.enabled === true &&
+          defaultSignImg &&
+          currWidgetsDetails?.type !== "image" &&
+          currWidgetsDetails?.type !== "stamp"
+      );
+      const getIndex =
+        defaultIndex !== -1 // Check if the default index exists
+          ? defaultIndex // If found, use it
+          : signtypes?.findIndex((x) => x.enabled === true);
+
+      if (getIndex !== -1) {
+        setIsSignTypes(true);
+        const tab = signatureTypes?.[getIndex].name;
+        const previousWidgetRes = signatureResponse.find(
+          (item) => item.type === currWidgetsDetails?.type
+        );
+        if (
+          previousWidgetRes?.tab &&
+          previousWidgetRes?.type === currWidgetsDetails?.type
+        ) {
+          setIsTab(previousWidgetRes?.tab || "draw");
+        } else if (currWidgetsDetails?.signatureType) {
+          setIsTab(currWidgetsDetails?.signatureType);
+        } else if (tab === "draw") {
+          setIsTab("draw");
+        } else if (tab === "upload") {
+          setIsImageSelect(true);
+          setIsTab("image");
+        } else if (tab === "typed") {
+          setIsTab("type");
+        } else if (tab === "default") {
+          if (currWidgetsDetails?.type !== "initials" && defaultSignImg) {
+            setIsTab("mysignature");
+          } else if (currWidgetsDetails?.type === "initials" && myInitial) {
+            setIsTab("myinitials");
+          } else {
+            setIsTab("draw");
+          }
+        }
+      } else {
+        setIsSignTypes(false);
+      }
+    } else if (currWidgetsDetails?.type === "image") {
+      setIsTab("image");
+    } else if (currWidgetsDetails?.type === "stamp") {
+      const previousWidgetRes = signatureResponse.find(
+        (item) => item.type === currWidgetsDetails?.type
+      );
+      if (previousWidgetRes?.tab === "uploadStamp") {
+        setIsTab("uploadStamp");
+      } else if (myStamp) {
+        setIsTab("myStamp");
+      } else {
+        setIsTab("uploadStamp");
+      }
+    }
+  }
+  function isTabEnabled(tabName) {
+    const isEnabled = signatureTypes?.find((x) => x.name === tabName)?.enabled;
+    return isEnabled;
+  }
+
+  //function for clear signature image
+  const handleClear = () => {
+    if (
+      ["signature", "initials", "stamp", "image", drawWidget].includes(
+        currWidgetsDetails?.type
+      )
+    ) {
+      if (canvasRef.current) {
+        canvasRef.current.clear();
+      }
+      setImage(null);
+      setOriginalImage(null); // Add this
+      setRemoveBgEnabled(false); // Optionally reset toggle
+      setSignature("");
+      if (isTab === "type") {
+        setTypedSignature("");
+      }
+    } else {
+      if (currWidgetsDetails?.type === cellsWidget) {
+        setWidgetValue("");
+        onChangeInput(
+          "",
+          currWidgetsDetails,
+          xyPosition,
+          props.index,
+          setXyPosition,
+          uniqueId
+        );
+      } else {
+        setSelectedCheckbox([]);
+        setWidgetValue("");
+        setStartDate("");
+        onChangeInput(
+          "",
+          currWidgetsDetails,
+          xyPosition,
+          props.index,
+          setXyPosition,
+          uniqueId
+        );
+      }
+    }
+  };
+  //function for set signature url
+  const handleSignatureChange = (data) => {
+    setSignature(data);
+  };
+  // `handleSaveToMySign` is used to save signature, initials, stamp as a default
+  const handleSaveToMySign = async () => {
+    if (signature || image?.src) {
+      setIsLoader(true);
+      try {
+        const mySignRes = await saveToMySign({
+          type: currWidgetsDetails?.type,
+          base64: signature || image?.src,
+          defaultSignId: mysign?.signId
+        });
+        if (mysign?.signId) {
+          dispatch(setSaveSignCheckbox({ ...mysign, signId: mySignRes?.id }));
+        }
+        if (currWidgetsDetails?.type === "signature") {
+          dispatch(setDefaultSignImg(mySignRes.base64File));
+        } else if (currWidgetsDetails?.type === "initials") {
+          dispatch(setMyInitial(mySignRes.base64File));
+        } else if (currWidgetsDetails?.type === "stamp") {
+          dispatch(setMyStamp(mySignRes.base64File));
+        }
+        alert(t("saved-successfully"));
+      } catch (error) {
+        console.log("error while save to my sign", error?.message);
+        alert(`${error.message}`);
+      } finally {
+        setIsLoader(false);
+      }
+    }
+  };
+
+  const handleSaveBtn = async () => {
+    // if User checked save signature or save initials checkbox
+    if (accesstoken && isSavedSign) {
+      await handleSaveToMySign();
+    }
+    resetToDefault();
+  };
+  const resetToDefault = () => {
+    props?.setCurrWidgetsDetails({});
+    if (
+      isTab !== "image" &&
+      !["stamp", "image"].includes(currWidgetsDetails?.type)
+    ) {
+      if (isTab === "myStamp" && myStamp) {
+        handleSaveImage();
+      } else if (isTab === "mysignature") {
+        setSignature("");
+        handleSaveSignature(null, "default");
+      } else if (currWidgetsDetails?.type === "initials") {
+        if (myInitial && isTab === "myinitials") {
+          handleSaveSignature(isTab, "myinitials");
+        } else if (isTab === "type") {
+          handleSaveSignature(
+            "type",
+            false,
+            textWidth,
+            textHeight,
+            typedSignature
+          );
+        } else {
+          handleSaveSignature(isTab);
+        }
+      } else if (isTab === "type") {
+        setSignature("");
+        handleSaveSignature(
+          "type",
+          false,
+          !currWidgetsDetails?.type === "initials" && textWidth > 150
+            ? 150
+            : textWidth,
+          !currWidgetsDetails?.type === "initials" && textHeight > 35
+            ? 35
+            : textHeight,
+          typedSignature
+        );
+      } else {
+        setSignature("");
+        canvasRef?.current?.clear();
+        const tab = isTab;
+        handleSaveSignature(tab);
+      }
+      handlePenColor();
+    } else {
+      setSignature("");
+      handleSaveImage("image");
+    }
+    setIsImageSelect(false);
+    setImage();
+    handleTab();
+  };
+  const autoSignAll = (
+    <label className="mb-0 cursor-pointer flex items-center text-sm text-base-content">
+      <input
+        className="mr-2 md:mr-3 op-checkbox op-checkbox-xs md:op-checkbox-sm"
+        type="checkbox"
+        value={isAutoSign}
+        onChange={(e) => {
+          setIsAutoSign(e.target.checked);
+        }}
+      />
+      {t("auto-sign-mssg")}
+    </label>
+  );
+
+  useEffect(() => {
+    const loadFont = async () => {
+      try {
+        const selectedFont = typedSignFont || fontSelect;
+        await document.fonts.load(`20px ${selectedFont}`);
+        const selectFontStyle = fontOptions.find(
+          (font) => font.value === selectedFont
+        );
+        setFontSelect(selectFontStyle?.value || fontOptions[0].value);
+      } catch (error) {
+        console.error("Error loading font:", error);
+      }
+    };
+
+    loadFont();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fontSelect]);
+  useEffect(() => {
+    handleWidgetsResponse();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTab]);
+
+  const handleWidgetsResponse = async () => {
+    //'signatureResponse' is save signature/initials widget response to show on response in signature pad
+    const previousWidgetRes = signatureResponse.find(
+      (item) => item.type === currWidgetsDetails?.type
+    );
+    let url = currWidgetsDetails?.options?.response;
+    if (currWidgetsDetails?.options?.response || previousWidgetRes) {
+      //draw widget
+      if (currWidgetsDetails?.type === drawWidget) {
+        if (canvasRef.current) {
+          const iBase64 = isValidBase64(url);
+          if (iBase64) {
+            canvasRef.current.fromDataURL(url);
+          } else {
+            const isAddSuffix = true;
+            const base64Url = await getBase64FromUrl(url, isAddSuffix);
+            canvasRef.current.fromDataURL(base64Url);
+          }
+        }
+      }
+      //signature and initial widgets
+      if (isSignOrInitials) {
+        if (isTab === "draw" || isTab === "image") {
+          if (
+            (previousWidgetRes?.tab === "draw" &&
+              currWidgetsDetails?.signatureType !== "draw" &&
+              previousWidgetRes?.type === currWidgetsDetails?.type) ||
+            currWidgetsDetails?.signatureType === "draw"
+          ) {
+            url = url || previousWidgetRes?.value;
+            setSignature(url);
+            canvasRef.current && canvasRef.current.fromDataURL(url);
+            return;
+          } else if (
+            previousWidgetRes?.tab === "image" &&
+            previousWidgetRes?.type === currWidgetsDetails?.type
+          ) {
+            setImage({
+              src: previousWidgetRes?.value,
+              imgType: previousWidgetRes?.imageType
+            });
+          }
+        }
+        if (isTab === "image" && currWidgetsDetails?.ImageType) {
+          setImage({ imgType: currWidgetsDetails?.ImageType, src: url });
+        }
+      }
+      //image and stamp widget
+      if (isImageOrStamp) {
+        const isPrefill = xyPosition.some(
+          (x) => x.Id === uniqueId && x?.Role === "prefill"
+        );
+        if (isPrefill) {
+          const getPrefillImg = prefillImg?.find(
+            (x) => x.id === currWidgetsDetails?.key
+          );
+          url = getPrefillImg?.base64;
+        }
+        if (
+          ["myStamp", "uploadStamp"].includes(previousWidgetRes?.tab) &&
+          previousWidgetRes?.type === currWidgetsDetails?.type
+        ) {
+          setImage({
+            imgType: previousWidgetRes?.ImageType,
+            src: previousWidgetRes?.value
+          });
+        } else if (isTab === "myStamp") {
+          setImage(null);
+        } else if (
+          currWidgetsDetails?.options?.response &&
+          currWidgetsDetails?.type === "image"
+        ) {
+          setImage({ imgType: currWidgetsDetails?.ImageType, src: url });
+        }
+      }
+    }
+    if (isTab === "type") {
+      const signerName = localStorage.getItem("signer")
+        ? JSON.parse(localStorage.getItem("signer"))?.Name
+        : currentUserName;
+      //trim user name or typed name value to show in initial signature
+      const trimmedName = typedSignature
+        ? typedSignature?.trim()
+        : props?.journey === "kiosk-signing" && kiosk_signer
+          ? kiosk_signer[0]?.Name?.trim()
+          : signerName?.trim();
+      //get full name of user
+      const fullUserName =
+        typedSignature ||
+        (props?.journey === "kiosk-signing" && kiosk_signer
+          ? kiosk_signer[0]?.Name
+          : signerName);
+      const firstCharacter = getInitials(trimmedName);
+      const userName =
+        currWidgetsDetails?.type === "initials" ? firstCharacter : fullUserName;
+      const signatureValue = currWidgetsDetails?.typeSignature;
+      setTypedSignature(signatureValue || userName || "");
+      convertToImg(fontSelect, signatureValue || userName || "");
+    }
+  };
+  // function for convert input text value in image
+  const convertToImg = async (fontStyle, text, color) => {
+    const maxWidth = currWidgetsDetails?.Width;
+    const maxHeight = currWidgetsDetails?.Height;
+    const widgetDims = { Width: maxWidth, Height: maxHeight };
+    const fontFamily = fontStyle || typedSignFont || fontSelect || "Fasthand";
+    const fillColor = color || penColor;
+    const dataUrl = convertTextToImg(fontFamily, text, fillColor, widgetDims);
+    // setSignature(dataUrl);
+    setTextWidth(maxWidth);
+    setTextHeight(maxHeight);
+    dispatch(setTypedSignFont(fontFamily));
+  };
+
+  // Effect to store original image and apply initial BG removal if enabled
+  useEffect(() => {
+    if (image?.src && !originalImage && (isImageSelect || isImageOrStamp)) {
+      // If there's an image, and we haven't stored an original for it yet,
+      // and we are in a relevant tab/widget type for uploads
+      setOriginalImage(image); // Store the current image as original
+
+      if (removeBgEnabled) {
+        setIsLoader(true);
+        removeBackground(image.src)
+          .then((blob) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              // setImage({ src: reader.result, imgType: blob.type });
+            };
+            reader.onerror = () => {
+              console.error(
+                "Error converting blob to data URL after BG removal."
+              );
+              // setImage(image); // Already original if error
+            };
+            reader.readAsDataURL(blob);
+          })
+          .catch((error) => {
+            console.error("Error removing background:", error);
+            // setImage(image); // Already original if error
+          })
+          .finally(() => setIsLoader(false));
+      }
+    }
+  }, [
+    image,
+    originalImage,
+    removeBgEnabled,
+    isImageSelect,
+    currWidgetsDetails?.type,
+    setIsLoader,
+    setImage,
+    setOriginalImage
+  ]);
+
+  // Effect for toggling BG removal ON/OFF
+  useEffect(() => {
+    if (!originalImage?.src || !(isImageSelect || isImageOrStamp)) {
+      // No original image to process or not in a relevant upload state
+      return;
+    }
+
+    if (removeBgEnabled) {
+      // removeBgEnabled is true
+      // Only process if current image is the original (BG not yet removed or was reverted)
+      if (image?.src === originalImage.src) {
+        setIsLoader(true);
+        removeBackground(originalImage.src)
+          .then((blob) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              setImage({ src: reader.result, imgType: blob.type });
+            };
+            reader.onerror = () => {
+              console.error("Error converting blob to data URL for toggle ON.");
+              setImage(originalImage); // Fallback
+            };
+            reader.readAsDataURL(blob);
+          })
+          .catch((error) => {
+            console.error("Error removing background for toggle ON:", error);
+            setImage(originalImage); // Fallback
+          })
+          .finally(() => setIsLoader(false));
+      }
+    } else {
+      // removeBgEnabled is false, revert to originalImage
+      if (image?.src !== originalImage.src) {
+        if (isTab === "myStamp") {
+          setImage(null);
+        } else {
+          setImage(originalImage);
+        }
+      }
+    }
+  }, [
+    removeBgEnabled,
+    originalImage,
+    image,
+    isImageSelect,
+    currWidgetsDetails?.type,
+    setImage,
+    setIsLoader
+  ]);
+
+  const savesigncheckbox = (
+    <label className="cursor-pointer flex items-center mb-0 text-center text-sm">
+      <input
+        className="mr-2 md:mr-3 op-checkbox op-checkbox-xs md:op-checkbox-sm"
+        type="checkbox"
+        checked={isSavedSign}
+        onChange={(e) => setIsSavedSign(e.target.checked)}
+      />
+      {t("save")} {t(`widgets-name.${currWidgetsDetails?.type}`)}
+    </label>
+  );
+  //function for set checked and unchecked value of checkbox
+  const handleCheckboxValue = (isChecked, ind) => {
+    let updateSelectedCheckbox = [],
+      checkedList;
+    updateSelectedCheckbox = selectedCheckbox ? [...selectedCheckbox] : [];
+
+    //if user select any option then add selected option
+    if (isChecked) {
+      updateSelectedCheckbox.push(ind);
+      setSelectedCheckbox(updateSelectedCheckbox);
+    } else {
+      //else user unselect any option then remove that option
+      checkedList = selectedCheckbox?.filter((data) => data !== ind);
+      setSelectedCheckbox([...checkedList]);
+    }
+    onChangeInput(
+      checkedList ? checkedList : updateSelectedCheckbox,
+      currWidgetsDetails,
+      xyPosition,
+      props.index,
+      setXyPosition,
+      uniqueId,
+      false
+    );
+  };
+
+  const handleRadioCheck = (data) => {
+    return widgetValue === data;
+  };
+
+  //function to handle select radio widget and set value seletced by user
+  const handleCheckRadio = (data) => {
+    setWidgetValue(data);
+    onChangeInput(
+      data,
+      currWidgetsDetails,
+      xyPosition,
+      props.index,
+      setXyPosition,
+      uniqueId,
+      false
+    );
+  };
+  const ExampleCustomInput = forwardRef(({ value, onClick }, ref) => (
+    <div
+      style={{
+        fontFamily: "Arial, sans-serif"
+      }}
+      // className={`${selectWidgetCls} overflow-hidden`}
+      onClick={onClick}
+      ref={ref}
+    >
+      {value ? value : "Select date"}
+      <i className="fa-light fa-calendar ml-[5px]"></i>
+    </div>
+  ));
+  ExampleCustomInput.displayName = "ExampleCustomInput";
+  //function to set onchange date
+  const handleOnDateChange = (date) => {
+    setWidgetValue(date);
+    setStartDate(date);
+  };
+  const handleOnchangeTextBox = (e) => {
+    // hide any prior validation error while typing
+    setIsShowValidation(false);
+    let value =
+      currWidgetsDetails?.type === "dropdown"
+        ? e.target?.value?.trim()
+        : e.target.value;
+    setWidgetValue(value);
+    props.setCurrWidgetsDetails?.((prev) =>
+      prev && prev.key === currWidgetsDetails?.key
+        ? { ...prev, options: { ...prev.options, response: value } }
+        : prev
+    );
+    onChangeInput(
+      value,
+      currWidgetsDetails,
+      xyPosition,
+      props.index,
+      setXyPosition,
+      uniqueId
+    );
+  };
+
+  const updateCells = (updated) => {
+    setWidgetValue(updated);
+    props.setCurrWidgetsDetails?.((prev) =>
+      prev && prev.key === currWidgetsDetails?.key
+        ? { ...prev, options: { ...prev.options, response: updated } }
+        : prev
+    );
+    onChangeInput(
+      updated,
+      currWidgetsDetails,
+      xyPosition,
+      props.index,
+      setXyPosition,
+      uniqueId
+    );
+  };
+  const handleCellsInput = (e) => {
+    const value = e.target.value;
+    setIsShowValidation(false);
+    updateCells(value);
+  };
+  //function is used to show widgets on modal according to selected widget type checkbox/date/radio/drodown/textbox/signature/image
+  const getWidgetType = (type) => {
+    const isStampOrImage =
+      currWidgetsDetails?.type === "stamp" ||
+      currWidgetsDetails?.type === "image";
+
+    const myStampImg = {
+      src: myStamp
+    };
+    const Tabs = [
+      //My signature tab
+      {
+        id: "mysignature",
+        label: t("my-signature"),
+        onClick: () => setIsTab("mysignature"),
+        show:
+          currWidgetsDetails?.type === "signature" &&
+          defaultSignImg &&
+          isTabEnabled("default"),
+        render: () => (
+          <>
+            <DefaultSignature
+              defaultSignImg={defaultSignImg}
+              currWidgetsDetails={currWidgetsDetails}
+            />
+            {uniqueId && (
+              <div className="flex justify-center my-2">{autoSignAll}</div>
+            )}
+          </>
+        )
+      },
+      //My initials tab
+      {
+        id: "myinitials",
+        label: t("my-initials"),
+        onClick: () => setIsTab("myinitials"),
+        show:
+          currWidgetsDetails?.type === "initials" &&
+          myInitial &&
+          isTabEnabled("default"),
+        render: () => (
+          <>
+            <DefaultSignature
+              defaultSignImg={myInitial}
+              currWidgetsDetails={currWidgetsDetails}
+            />
+            {uniqueId && (
+              <div className="flex justify-center my-2">{autoSignAll}</div>
+            )}
+          </>
+        )
+      },
+      //Draw tab
+      {
+        id: "draw",
+        label: t("draw"),
+        show: isTabEnabled("draw") && !isStampOrImage,
+        onClick: () => setIsTab("draw"),
+        render: () => (
+          <>
+            <Draw
+              penColor={penColor}
+              canvasRef={canvasRef}
+              currWidgetsDetails={currWidgetsDetails}
+              handleSignatureChange={handleSignatureChange}
+            />
+            <div className="flex flex-row justify-between mt-[10px]">
+              <PenColorComponent
+                providedColors={penColors}
+                penColor={penColor}
+                convertToImg={convertToImg}
+                fontSelect={fontSelect}
+                typedSignature={typedSignature}
+                setPenColor={setPenColor}
+              />
+            </div>
+            <div className="flex flex-row ml-1 mt-1 gap-x-3 text-base-content">
+              {/* Standalone autoSignAll for "Draw" tab if conditions met */}
+              {/* 'uniqueId' represents the current user */}
+              {uniqueId && (
+                <div className="flex justify-start my-1">{autoSignAll}</div>
+              )}
+              {accesstoken && (
+                <div className="flex justify-start my-1">
+                  {mysign?.isVisible && savesigncheckbox}
+                </div>
+              )}
+            </div>
+          </>
+        )
+      },
+      //Upload Image tab
+      {
+        id: "image",
+        label: t("upload-image"),
+        onClick: () => {
+          setIsTab("image");
+          setIsImageSelect(true);
+        },
+        show:
+          (isTabEnabled("upload") && currWidgetsDetails?.type !== "stamp") ||
+          currWidgetsDetails?.type === "image",
+        render: () => (
+          <>
+            <UploadImage
+              currWidgetsDetails={currWidgetsDetails}
+              image={image}
+              onImageChange={onImageChange}
+              isImageSelect={isImageSelect}
+              isStampOrImage={isStampOrImage}
+            />
+            {/* 'uniqueId' represents the current user */}
+            {/* 'image' checks whether an image is available */}
+            {/* 'isImageSelect' indicates if the user selected the upload-image option for the signature pad */}
+            {/* 'isImageOrStamp' determines whether the item is an image or a stamp */}
+            {(uniqueId || (image && (isImageSelect || isImageOrStamp))) && (
+              <div className="flex flex-wrap flex-row sm:justify-center items-center gap-x-3 my-2 text-base-content">
+                {uniqueId && autoSignAll}
+                {image && (isImageSelect || isImageOrStamp) && (
+                  <label
+                    htmlFor={`removeBgToggleModal-${currWidgetsDetails?.key}`}
+                    className="mb-0 cursor-pointer flex items-center text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      id={`removeBgToggleModal-${currWidgetsDetails?.key}`} // Unique ID
+                      className="mr-2 op-checkbox op-checkbox-xs md:op-checkbox-sm"
+                      checked={removeBgEnabled}
+                      onChange={() => setRemoveBgEnabled(!removeBgEnabled)}
+                    />
+                    {t("remove-background")}
+                  </label>
+                )}
+                {accesstoken && isSignOrInitials && (
+                  <div className="flex justify-start my-1">
+                    {mysign?.isVisible && savesigncheckbox}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )
+      },
+      //Typed signature tab
+      {
+        id: "type",
+        label: t("type"),
+        onClick: () => {
+          setIsTab("type");
+          if (previousWidgetRes?.tab !== "type") {
+            setTypedSignature("");
+          }
+        },
+        show: isTabEnabled("typed") && !isStampOrImage,
+        render: () => (
+          <>
+            <TypeSignature
+              currWidgetsDetails={currWidgetsDetails}
+              fontSelect={fontSelect}
+              penColor={penColor}
+              typedSignature={typedSignature}
+              setTypedSignature={setTypedSignature}
+              convertToImg={convertToImg}
+              fontOptions={fontOptions}
+              setFontSelect={setFontSelect}
+            />
+            <div className="flex flex-row justify-between mt-[10px]">
+              <PenColorComponent
+                providedColors={penColors}
+                penColor={penColor}
+                convertToImg={convertToImg}
+                fontSelect={fontSelect}
+                typedSignature={typedSignature}
+                setPenColor={setPenColor}
+              />
+            </div>
+            <div className="flex flex-row ml-1 mt-2 gap-x-3 text-base-content">
+              {/* Standalone autoSignAll for "Type" tab if conditions met */}
+              {uniqueId && (
+                <div className="flex justify-start my-1">{autoSignAll}</div>
+              )}
+              {accesstoken && (
+                <div className="flex justify-start my-1">
+                  {mysign?.isVisible && savesigncheckbox}
+                </div>
+              )}
+            </div>
+          </>
+        )
+      },
+      //Mystamp tab
+      {
+        id: "myStamp",
+        label: "My stamp",
+        onClick: () => setIsTab("myStamp"),
+        show: currWidgetsDetails?.type === "stamp" && myStamp,
+        render: () => (
+          <UploadImage
+            currWidgetsDetails={currWidgetsDetails}
+            image={myStampImg}
+            onImageChange={onImageChange}
+            isImageSelect={isImageSelect}
+            isStampOrImage={isStampOrImage}
+          />
+        )
+      },
+      // Upload Stamp Tab
+      {
+        id: "uploadStamp",
+        label: "Upload stamp",
+        onClick: () => setIsTab("uploadStamp"),
+        show: currWidgetsDetails?.type === "stamp",
+        render: () => (
+          <>
+            <UploadImage
+              currWidgetsDetails={currWidgetsDetails}
+              image={image}
+              onImageChange={onImageChange}
+              isImageSelect={isImageSelect}
+              isStampOrImage={isStampOrImage}
+            />
+            {/* 'uniqueId' represents the current user */}
+            {(uniqueId || image) && (
+              <div className="flex flex-wrap flex-row sm:justify-center items-center gap-x-3 my-2 text-base-content">
+                {uniqueId && autoSignAll}
+                {image && (
+                  <label
+                    htmlFor={`removeBgToggleModal-${currWidgetsDetails?.key}`}
+                    className="mb-0 cursor-pointer flex items-center text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      id={`removeBgToggleModal-${currWidgetsDetails?.key}`} // Unique ID
+                      className="mr-2 op-checkbox op-checkbox-xs md:op-checkbox-sm"
+                      checked={removeBgEnabled}
+                      onChange={() => setRemoveBgEnabled(!removeBgEnabled)}
+                    />
+                    {t("remove-background")}
+                  </label>
+                )}
+                {accesstoken && (
+                  <div className="flex justify-start my-1">
+                    {mysign?.isVisible && savesigncheckbox}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )
+      }
+    ];
+
+    switch (type) {
+      case "image":
+      case "initials":
+      case "stamp":
+      case "signature":
+        return (
+          <div className="flex flex-col">
+            {isLoader && (
+              <div className="absolute w-full h-full inset-0 flex justify-center items-center bg-base-content/30 z-50">
+                <Loader />
+              </div>
+            )}
+            {isSignTypes ? (
+              <>
+                <div className="text-base-content rounded-[4px] tabWidth">
+                  {/* Render All Tabs  */}
+                  <div className="ml-3 flex justify-start gap-4 text-[11px] md:text-base my-[3px]">
+                    {Tabs.filter((tab) => tab.show).map((tab) => (
+                      <div key={tab.id}>
+                        <span
+                          className={`${isTab === tab.id && isTabCls} ml-[2px] cursor-pointer`}
+                          onClick={tab.onClick}
+                        >
+                          {tab.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="h-full mt-3">
+                  {Tabs.find((t) => t.id === isTab)?.render()}
+                </div>
+              </>
+            ) : (
+              <div className="mx-3 mb-6 mt-3">
+                <p>{t("at-least-one-signature-type")}</p>
+              </div>
+            )}
+          </div>
+        );
+      case "checkbox":
+        const checkBoxLayout =
+          currWidgetsDetails?.options?.layout || "vertical";
+        const isMultipleCheckbox =
+          currWidgetsDetails?.options?.values?.length > 0 ? true : false;
+        const checkBoxWrapperClass = `flex items-start ${
+          checkBoxLayout === "horizontal"
+            ? `flex-row flex-wrap ${isMultipleCheckbox ? "gap-x-2" : ""}`
+            : `flex-col ${isMultipleCheckbox ? "gap-y-[5px]" : ""}`
+        }`; // Using gap-y-1 for consistency, adjust if needed
+
+        return (
+          <div
+            className={`border-[1px] border-gray-300 rounded-[2px] pt-1 px-2.5 ${checkBoxWrapperClass}`}
+          >
+            {currWidgetsDetails?.options?.values?.map((data, ind) => (
+              <div key={ind} className="text-base-content select-none-cls">
+                <label
+                  // htmlFor={`checkbox-${currWidgetsDetails?.key + ind}`}
+                  className="text-xs flex items-center gap-1 cursor-pointer"
+                >
+                  <input
+                    id={`checkbox-${currWidgetsDetails?.key + ind}`}
+                    className={`${
+                      ind === 0 ? "mt-0" : "mt-[5px]"
+                    } op-checkbox op-checkbox-xs rounded-[1px] mt-1`}
+                    type="checkbox"
+                    checked={!!selectCheckbox(ind, selectedCheckbox)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        const maxRequired =
+                          currWidgetsDetails?.options?.validation
+                            ?.maxRequiredCount;
+                        const maxCountInt =
+                          maxRequired && parseInt(maxRequired);
+                        if (maxCountInt > 0) {
+                          if (
+                            selectedCheckbox &&
+                            selectedCheckbox?.length <= maxCountInt - 1
+                          ) {
+                            handleCheckboxValue(e.target.checked, ind);
+                          }
+                        } else {
+                          handleCheckboxValue(e.target.checked, ind);
+                        }
+                      } else {
+                        handleCheckboxValue(e.target.checked, ind);
+                      }
+                    }}
+                  />
+                  {data}
+                </label>
+              </div>
+            ))}
+          </div>
+        );
+      case textInputWidget:
+        return (
+          <TextInput
+            widgetRef={widgetRef}
+            widgetValue={widgetValue}
+            handleOnchangeTextBox={handleOnchangeTextBox}
+            textInputcls={textInputcls}
+            currWidgetsDetails={currWidgetsDetails}
+            handleInputBlur={handleValidation}
+          />
+        );
+      case cellsWidget:
+        return (
+          <CellsInput
+            cellsValue={widgetValue}
+            handleCellsInput={handleCellsInput}
+            textInputcls={textInputcls}
+            handleValidation={handleValidation}
+            hint={hint}
+            count={currWidgetsDetails?.options?.cellCount || 0}
+          />
+        );
+      case "dropdown":
+        return (
+          <select
+            className="op-select op-select-bordered op-select-sm focus:outline-none hover:border-base-content text-base-content w-full text-xs"
+            id="myDropdown"
+            value={widgetValue?.trim()}
+            onChange={(e) => handleOnchangeTextBox(e)}
+          >
+            {/* Default/Title option */}
+            <option value="" disabled hidden>
+              {/* {currWidgetsDetails?.options?.name} */}
+              {t("choose-one")}
+            </option>
+            {currWidgetsDetails?.options?.values?.map((data, ind) => (
+              <option key={ind} value={data?.trim()}>
+                {data?.trim()}
+              </option>
+            ))}
+          </select>
+        );
+      case "name":
+        return (
+          <input
+            ref={widgetRef}
+            type="text"
+            placeholder={hint || widgetTypeTranslation}
+            value={widgetValue}
+            onBlur={handleValidation}
+            onChange={(e) => handleOnchangeTextBox(e)}
+            className={textInputcls}
+          />
+        );
+      case "company":
+        return (
+          <input
+            ref={widgetRef}
+            placeholder={hint || widgetTypeTranslation}
+            value={widgetValue}
+            type="text"
+            onBlur={handleValidation}
+            onChange={(e) => handleOnchangeTextBox(e)}
+            className={textInputcls}
+          />
+        );
+      case "job title":
+        return (
+          <input
+            ref={widgetRef}
+            type="text"
+            onBlur={handleValidation}
+            placeholder={hint || widgetTypeTranslation}
+            value={widgetValue}
+            onChange={(e) => handleOnchangeTextBox(e)}
+            className={textInputcls}
+          />
+        );
+      case "date":
+        return (
+          <div className="inline-flex flex-col items-center w-full">
+            {/* Input + format group */}
+            <div className="inline-flex flex-col items-center">
+              {/* Date input */}
+              <div className="border-[1px] opensigncss:border-gray-300 opensigndark:border-base-content text-base-content rounded-[2px] px-3 py-1 inline-flex">
+                <DatePicker
+                  renderCustomHeader={({ date, changeYear, changeMonth }) => (
+                    <div className="flex items-center gap-2 ml-2">
+                      <select
+                        className="bg-transparent outline-none"
+                        value={months[getMonth(date)]}
+                        onChange={({ target: { value } }) =>
+                          changeMonth(months.indexOf(value))
+                        }
+                      >
+                        {months.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        className="bg-transparent outline-none"
+                        value={getYear(date)}
+                        onChange={({ target: { value } }) => changeYear(value)}
+                      >
+                        {years.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  closeOnScroll
+                  selected={startDate}
+                  onChange={handleOnDateChange}
+                  popperPlacement="top-end"
+                  customInput={<ExampleCustomInput />}
+                  dateFormat={
+                    selectDate?.format ||
+                    currWidgetsDetails?.options?.validation?.format ||
+                    "MM/dd/yyyy"
+                  }
+                  portalId="root-portal"
+                />
+              </div>
+              {/* Format */}
+              <span className="mt-1 text-gray-300 uppercase">
+                {currWidgetsDetails?.options?.validation?.format}
+              </span>
+            </div>
+            {/* hint */}
+            {hint && (
+              <div className="mt-2 flex items-center gap-2 text-sm">
+                <span>{hint}</span>
+              </div>
+            )}
+          </div>
+        );
+      case "email":
+        return (
+          <input
+            ref={widgetRef}
+            type="email"
+            onBlur={handleValidation}
+            placeholder={hint || widgetTypeTranslation}
+            value={widgetValue}
+            onChange={(e) => handleOnchangeTextBox(e)}
+            className={textInputcls}
+          />
+        );
+      case radioButtonWidget:
+        const radioLayout = currWidgetsDetails.options?.layout || "vertical";
+        const isOnlyOneBtn =
+          currWidgetsDetails.options?.values?.length > 0 ? true : false;
+        const radioWrapperClass = `flex items-start ${
+          radioLayout === "horizontal"
+            ? `flex-row flex-wrap ${isOnlyOneBtn ? "gap-x-2" : ""}`
+            : `flex-col ${isOnlyOneBtn ? "gap-y-[5px]" : ""}`
+        }`; // Using gap-y-1 for consistency, adjust if needed
+        return (
+          <div
+            className={`border-[1px] border-gray-300 rounded-[2px] pt-1 px-2.5 ${radioWrapperClass}`}
+          >
+            {currWidgetsDetails?.options?.values.map((data, ind) => {
+              const label =
+                typeof data === "string"
+                  ? data
+                  : data && typeof data === "object" && data.name != null
+                    ? String(data.name)
+                    : "";
+              return (
+                <div key={ind} className="text-base-content select-none-cls">
+                  <label
+                    // htmlFor={`radio-${currWidgetsDetails?.key + ind}`}
+                    className="cursor-pointer flex items-center text-sm gap-1"
+                  >
+                    <input
+                      id={`radio-${currWidgetsDetails?.key + ind}`}
+                      className={`op-radio op-radio-xs mt-1`}
+                      type="radio"
+                      value={label}
+                      checked={handleRadioCheck(label?.trim())}
+                      onChange={(e) => {
+                        handleCheckRadio(e.target.value?.trim());
+                      }}
+                    />
+                    <span>{label}</span>
+                  </label>
+                </div>
+              );
+            })}
+          </div>
+        );
+      case textWidget:
+        return (
+          <TextInput
+            widgetRef={widgetRef}
+            widgetValue={widgetValue}
+            handleOnchangeTextBox={handleOnchangeTextBox}
+            textInputcls={textInputcls}
+            currWidgetsDetails={currWidgetsDetails}
+          />
+        );
+      case drawWidget:
+        return (
+          <div>
+            <Draw
+              penColor={penColor}
+              canvasRef={canvasRef}
+              currWidgetsDetails={props?.currWidgetsDetails}
+              handleSignatureChange={handleSignatureChange}
+            />
+            <div className="flex flex-row justify-between mt-[10px]">
+              <PenColorComponent
+                penColor={penColor}
+                setPenColor={setPenColor}
+              />
+            </div>
+          </div>
+        );
+      default:
+        return (
+          <input
+            placeholder={t("widgets-name.text")}
+            readOnly
+            className={textInputcls}
+          />
+        );
+    }
+  };
+
+  //function is used to check current widget is required or optional
+  const handleCheckOptional = () => {
+
+    const effectiveStatus =
+      currWidgetsDetails?.options?.status ||
+      "required";
+    let isRequired = false;
+    const isCheckBox =
+      !currWidgetsDetails.options?.isReadOnly &&
+      currWidgetsDetails.type === "checkbox";
+    if (isCheckBox && props?.role !== "prefill") {
+      //get minimum required count if  exist
+      const minCount =
+        currWidgetsDetails?.options?.validation?.minRequiredCount;
+      const parseMin = minCount && parseInt(minCount);
+      if (parseMin > 0) {
+        isRequired = true;
+      }
+    } else {
+      isRequired = effectiveStatus === "required";
+    }
+    if (isRequired) {
+      setIsOptional(false);
+    }
+  };
+
+  //function is used to show how many field left and how many total widget
+  const HandleRequiredField = () => {
+
+    let widgetsPosition = [];
+    if (uniqueId) {
+      const currSignerWidget = xyPosition?.find(
+        (data) => data?.Id === uniqueId
+      );
+      widgetsPosition = currSignerWidget.placeHolder;
+    } else {
+      widgetsPosition = xyPosition;
+    }
+
+    //generate all nested level in single level
+    const flatPlaceholder = widgetsPosition?.flatMap((page) =>
+      page.pos
+        .filter((widget) => {
+          if (widget.options?.isReadOnly) return false;
+          return true;
+        })
+        .map((widget) => ({ widget, pageNumber: page.pageNumber }))
+    );
+    let totalWidget = 0;
+    let alreadyValue = 0;
+    flatPlaceholder?.forEach(({ widget: field }) => {
+      const isValueExist =
+        field.options?.response || field.options?.defaultValue;
+      totalWidget++;
+      if (isValueExist) {
+        alreadyValue++;
+      }
+    });
+
+    const leftRequiredWidget = totalWidget - alreadyValue;
+    useEffect(() => {
+      handleCheckOptional();
+      if (
+        currWidgetsDetails?.key === lastWidget ||
+        flatPlaceholder?.length === 1
+      ) {
+        setIsLastWidget(true);
+      }
+    }, []);
+    return (
+      <span className="text-center text-[12px] text-base-content">
+        {t("required-mssg", { leftRequiredWidget, totalWidget })}
+      </span>
+    );
+  };
+  //function to validate text widget expression or type
+  const validateExpression = (regexValidation) => {
+    if (widgetValue && regexValidation) {
+      let regexObject = regexValidation;
+      if (currWidgetsDetails?.options?.validation?.type === "regex") {
+        regexObject = RegexParser(regexValidation);
+      }
+      let isValidate = regexObject.test(widgetValue);
+      if (!isValidate) {
+        setIsShowValidation(true);
+      }
+    }
+  };
+  //function is used when user enter value in any textbox then check validation
+  const handleValidation = () => {
+    const validateType = currWidgetsDetails?.options?.validation?.type;
+    let regexValidation;
+    switch (validateType) {
+      case "email":
+        regexValidation = emailRegex;
+        validateExpression(regexValidation);
+        break;
+      case "number":
+        regexValidation = /^[0-9\s]*$/;
+        validateExpression(regexValidation);
+        break;
+      case "ssn":
+        regexValidation = /^(?!000|666|9\d{2})\d{3}-(?!00)\d{2}-(?!0000)\d{4}$/;
+        validateExpression(regexValidation);
+        break;
+      default:
+        // Grab the current pattern (if it exists)
+        const pattern = currWidgetsDetails?.options?.validation?.pattern;
+        // Removed `backwordSupportPattern` (/^[a-zA-Z0-9s]+$/) — it blocked spaces and special characters.
+        const backwordSupportPattern =
+          pattern && pattern === "/^[a-zA-Z0-9s]+$/" ? "" : pattern; // If it matches exactly '/^[a-zA-Z0-9s]+$/', clear it
+        regexValidation = backwordSupportPattern || "";
+        validateExpression(regexValidation);
+        break;
+    }
+  };
+
+  // `clearWidgetResponse` is used to clear response of signature, stamp, image, initials, draw widget based on id
+  const clearWidgetResponse = () => {
+    const widgetKey = currWidgetsDetails?.key;
+    const isOptional =
+      currWidgetsDetails?.options?.status === "optional" || false;
+    if (widgetKey && isOptional) {
+      const isPrefill = xyPosition.some(
+        ({ Id, Role }) => Id === uniqueId && Role === "prefill"
+      );
+      if (isPrefill) dispatch(setPrefillImg({ id: widgetKey, base64: "" }));
+
+      setXyPosition((prev) =>
+        prev.map((signer) => {
+          if (signer.Id !== uniqueId) return signer;
+
+          const idx = signer?.placeHolder?.findIndex((p) =>
+            p.pos?.some((w) => w.key === widgetKey)
+          );
+          if (idx === -1) return signer;
+
+          return {
+            ...signer,
+            placeHolder: clearResponse(widgetKey, signer.placeHolder, idx)
+          };
+        })
+      );
+    }
+  };
+
+  //function too use on click on next/finish button then update modal UI according to current widgets
+  const handleClickOnNext = async (isFinishDoc) => {
+    if (
+      ["signature", "stamp", "image", "initials", drawWidget].includes(
+        currWidgetsDetails?.type
+      )
+    ) {
+      if (
+        signature ||
+        image ||
+        myInitial ||
+        defaultSignImg ||
+        myStamp ||
+        typedSignature
+      ) {
+        //function to save all type draw or image
+        handleSaveBtn();
+      } else {
+        clearWidgetResponse();
+      }
+    }
+    if (isSave) {
+      handleclose();
+    }
+    //condition when there are no any details left for response and current widget is last widget then
+    //on click on finish button embed all widget's details on pdf and finish document
+    if (isFinishDoc) {
+      setIsFinish(true);
+      props.setCurrWidgetsDetails(currWidgetsDetails);
+    } else if (!isSave) {
+      const widgetsPosition = xyPosition?.find((data) => data.Id === uniqueId);
+      let nextWidgetDetails = null;
+      const editableWidgets = (widgetsPosition?.placeHolder ?? []).flatMap(
+        ({ pos = [], pageNumber }) =>
+          pos
+            .filter(({ options, key }) => {
+              if (
+                options?.isReadOnly
+              )
+                return false;
+              return true; // ← must be OUTSIDE the ee block
+            })
+            .map((widget) => ({ widget, pageNumber }))
+      );
+      //get current index of widget
+      const currentIndex = editableWidgets.findIndex(
+        (item) => item.widget.key === currWidgetsDetails?.key
+      );
+      //get totoal widget length
+      const totalItems = editableWidgets?.length;
+      //get last widget index ex- arr=[1,2,3] curr=2, then last will be 1
+      const lastIndex = (currentIndex + totalItems - 1) % totalItems;
+      //set last widget details for iteration ex- arr=[1,2,3] curr=2 last=1 then ite= 2,3,1 on last we will finish document
+      if (!lastWidget) {
+        const lastWidgetKey = editableWidgets[lastIndex]?.widget?.key;
+        dispatch(setLastIndex(lastWidgetKey));
+      }
+
+      //get next widgets index number ex-  arr=[1,2,3] curr=3 last=2 then next=1
+      let index = (currentIndex + 1) % totalItems;
+      const nextItem = editableWidgets[index];
+      if (nextItem && !nextItem.widget.options?.isReadOnly) {
+        const nextCurrentValue = nextItem.widget;
+        const nextPageNumber = nextItem.pageNumber;
+        props.setPageNumber(nextPageNumber);
+        nextWidgetDetails = nextCurrentValue;
+      }
+
+      dispatch(setIsShowModal({ [nextWidgetDetails?.key]: true }));
+      props.setCurrWidgetsDetails({
+        ...nextWidgetDetails,
+        pageNumber: nextItem?.pageNumber
+      });
+    }
+
+  };
+  //function is used to disable/enable save button
+  const handleDisable = () => {
+    if (!isShowValidation) {
+      if (isOptional && uniqueId) {
+        return false;
+      } else if (
+        ["signature", "stamp", "image", "initials", drawWidget].includes(
+          currWidgetsDetails?.type
+        )
+      ) {
+        const { type } = currWidgetsDetails || {};
+        //conditions based on widget type or active tab
+        const conditions = {
+          draw: !signature, // Draw tab requires a drawn signature
+          image: !image, // Upload tab requires an image
+          mysignature: !defaultSignImg, // My Signature tab requires a saved/default signature
+          type: !(typedSignature?.trim()?.length > 0), // Type tab requires non-empty typed signature
+          myinitials: !myInitial,
+          myStamp: !myStamp,
+          uploadStamp: !image
+        };
+        // First check conditions based on widget type
+        if (type && conditions.hasOwnProperty(type)) {
+          return conditions[type];
+        }
+        //If type doesn't match, check based on active tab
+        if (isTab && conditions.hasOwnProperty(isTab)) {
+          return conditions[isTab];
+        }
+
+        return true; // default
+      } else if (
+        currWidgetsDetails?.type === "checkbox" &&
+        selectedCheckbox?.length > 0
+      ) {
+        return false;
+      } else if (isEmptyValue(widgetValue)) {
+        return true;
+      } else {
+        return false;
+      }
+    } else {
+      return true;
+    }
+  };
+  const handleclose = () => {
+    // If validation is shown, clear the response and close the modal
+    if (isShowValidation) {
+      handleClear();
+      setIsShowValidation(false);
+    }
+    dispatch(setIsShowModal({}));
+    dispatch(setLastIndex(""));
+  };
+  //function is used to execute the finish button functionality
+  const handleFinish = () => {
+    props?.finishDocument();
+    dispatch(setIsShowModal({}));
+  };
+
+  useEffect(() => {
+    if (!isSave) {
+      handleFinishButton();
+    }
+  }, [isSave]);
+  //'handleFinishButton' function is used to show finish button click on any widget if all required widgets have response
+  const handleFinishButton = () => {
+    const widgetsPosition = xyPosition?.find((data) => data.Id === uniqueId);
+
+    //using 'flatMap' create all nested array in one level
+    const editableWidgets = widgetsPosition?.placeHolder?.flatMap((page) =>
+      page.pos
+        .filter((widget) => {
+          if (widget.options?.isReadOnly) return false;
+          return true; // ← outside ee block
+        })
+        .map((widget) => ({ ...widget, pageNumber: page.pageNumber }))
+    );
+    const getcurrentwidget = editableWidgets?.find(
+      (data) => data?.key === currWidgetsDetails?.key
+    );
+    if (getcurrentwidget?.options?.response) {
+      props?.setCurrWidgetsDetails(getcurrentwidget);
+    }
+    let isResponse = true;
+    //condition to check all required widgets have response or not then show finish button
+    for (const data of editableWidgets) {
+      // Use the dynamic required status (respects require/optional logic actions).
+      const effectiveStatus =
+        data.options?.status ||
+        "required";
+      if (data?.type === "checkbox") {
+        const minCount = data.options?.validation?.minRequiredCount;
+        const parseMin = minCount && parseInt(minCount);
+        const hasNoResponse =
+          (!Array.isArray(data?.options?.response) ||
+            data.options.response.length === 0) &&
+          (!Array.isArray(data?.options?.defaultValue) ||
+            data.options.defaultValue.length === 0);
+        if (parseMin > 0 && hasNoResponse) {
+          isResponse = false;
+          break;
+        }
+      } else if (
+        !data.options.response &&
+        !data?.options?.defaultValue &&
+        effectiveStatus === "required"
+      ) {
+        isResponse = false;
+        break;
+      }
+    }
+    if (isResponse) {
+      setIsLastWidget(true);
+    }
+  };
+
+  const formatWidgetName = (widgetName) => {
+    if (!widgetName) return widgetTypeTranslation;
+
+    const parts = widgetName.split("-");
+    const [first] = parts;
+    const lastWord = parts.length > 1 ? `-${parts[parts.length - 1]}` : "";
+
+    return currWidgetsDetails?.type === first
+      ? `${first}${lastWord}`
+      : widgetName;
+  };
+  return (
+    <>
+      <ModalUi
+        isOpen={true}
+        handleClose={() => handleclose()}
+        position="bottom"
+      >
+        <div className="h-[100%] p-[18px]">
+          {isLoader && (
+            <div className="absolute w-full h-full inset-0 flex justify-center items-center bg-base-content/30 z-50">
+              <Loader />
+            </div>
+          )}
+          {isFinish ? (
+            <>
+              <div className="p-1 mt-3">
+                <span className="text-base text-base-content">
+                  {
+                        t("finish-mssg")
+                  }
+                </span>
+              </div>
+              <div className="flex gap-3 items-center mt-4">
+                <button
+                  type="button"
+                  className="op-btn op-btn-primary op-btn-sm px-4"
+                  onClick={() => handleFinish()}
+                >
+                  {
+                        t("finish")
+                  }
+                </button>
+                <button
+                  type="button"
+                  className="op-btn op-btn-secondary op-btn-sm px-[18px]"
+                  onClick={() => dispatch(setIsShowModal({}))}
+                >
+                  {t("review")}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <div className="relative inline-block">
+                  <span className="text-base text-base-content">
+                    {formatWidgetName(currWidgetsDetails?.options?.name)}
+                  </span>
+                  {!isOptional && (
+                    <span className="absolute -top-1 -right-2 text-red-500 text-lg">
+                      *
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-col justify-center m-2 mt-3">
+                  <div className="flex justify-center">
+                    {getWidgetType(currWidgetsDetails?.type)}
+                  </div>
+                  {isShowValidation && (
+                    <span className="text-[12px] text-red-500">
+                      {t("validation-alert-1")}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex justify-between items-center text-center">
+                {showClearbtn ? (
+                  <button
+                    type="button"
+                    className="op-btn op-btn-ghost op-btn-sm text-base-content mr-1"
+                    onClick={handleClear}
+                  >
+                    {t("clear")}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="op-btn op-btn-ghost text-base-content op-btn-sm mr-1 cursor-default"
+                  ></button>
+                )}
+                <div className="flex items-center gap-2">
+                  {(!isSave || props?.role === "prefill") && (
+                    <HandleRequiredField />
+                  )}
+                  {isSave ? (
+                    <button
+                      type="button"
+                      className="op-btn op-btn-primary op-btn-sm"
+                      onClick={() => handleClickOnNext()}
+                      disabled={handleDisable()}
+                    >
+                      {t("save")}
+                    </button>
+                  ) : isLastWidget ? (
+                    <button
+                      type="button"
+                      className="op-btn op-btn-primary op-btn-sm"
+                      disabled={handleDisable()}
+                      onClick={() => handleClickOnNext(true)} // isFinishDoc
+                    >
+                      {t("done")}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="op-btn op-btn-primary op-btn-sm text-xs md:text-sm"
+                      onClick={() => handleClickOnNext()}
+                      disabled={handleDisable()}
+                    >
+                      {t("next-field")}
+                      <i className="fa-light fa-forward-step"></i>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </ModalUi>
+    </>
+  );
+}
+
+export default WidgetsValueModal;

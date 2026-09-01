@@ -1,0 +1,1278 @@
+import { useState, useEffect, forwardRef } from "react";
+import BorderResize from "./BorderResize";
+import { Rnd } from "react-rnd";
+import {
+  changeDateToMomentFormat,
+  defaultWidthHeight,
+  fontColorArr,
+  fontsizeArr,
+  getContainerScale,
+  handleHeighlightWidget,
+  onChangeInput,
+  radioButtonWidget,
+  textInputWidget,
+  cellsWidget,
+  textWidget,
+  selectFormat,
+  getYear,
+  getMonth,
+  months,
+  years,
+  getDefaultDate,
+  getDefaultFormat,
+  handleBackground
+} from "../../constant/Utils";
+import PlaceholderType from "./PlaceholderType";
+import moment from "moment";
+import "../../styles/opensigndrive.css";
+import { useTranslation } from "react-i18next";
+import { useDispatch } from "react-redux";
+import { setIsShowModal } from "../../redux/reducers/widgetSlice";
+import { themeColor } from "../../constant/const";
+import { useGuidelinesContext } from "../../context/GuidelinesContext";
+import DatePicker from "react-datepicker";
+import DateWidgetModal from "../../primitives/DateWidgetModal";
+import { dateFormat } from "../../utils";
+
+/**
+ * Custom input UI for DatePicker
+ * - Declaring custom input outside resolve issue of the component recreates the input component identity on each state update, which can break re-open behavior after first use
+ */
+const DatePickerCustomInput = forwardRef(({ value, onClick }, ref) => (
+  <div
+    className="border-gray-400 rounded-[50px] border-[1px] px-3  text-xs py-2 focus:outline-none hover:border-base-content "
+    onClick={onClick}
+    ref={ref}
+  >
+    {value}
+    <i className={`${value ? "ml-[5px]" : "w-20"} fa-light fa-calendar `}></i>
+  </div>
+));
+DatePickerCustomInput.displayName = "DatePickerCustomInput";
+
+function Placeholder(props) {
+  const { t } = useTranslation();
+  const dispatch = useDispatch();
+  const { showGuidelines } = useGuidelinesContext();
+  const statusArr = ["Required", "Optional"];
+  const widgetData =
+    props.pos?.options?.defaultValue || props.pos?.options?.response;
+  const [isDateModal, setIsDateModal] = useState(false);
+  const [containerScale, setContainerScale] = useState();
+  const [selectDate, setSelectDate] = useState({});
+  const [dateFormatList, setDateFormatList] = useState([]);
+  const [clickonWidget, setClickonWidget] = useState({});
+  const [formdata, setFormdata] = useState({
+    status: props?.pos?.options?.status || "required",
+    isReadOnly: props?.pos?.options?.isReadOnly || false,
+    name: props?.pos?.options?.name,
+    hint: props?.pos?.options?.hint
+  });
+  const [isToday, setIsToday] = useState(
+    props.pos?.options?.response === "today" ? true : false
+  );
+  const selectedFormatIndex = dateFormatList?.findIndex(
+    (item) =>
+      item.format === selectDate?.format ||
+      item?.format === props.pos?.options?.validation?.format
+  );
+
+  const isSelfSign = props.isSignYourself || props.isSelfSign;
+  const startDate = props?.pos?.options?.response
+    ? getDefaultDate(
+        props?.pos?.options?.response,
+        props.pos?.options?.validation?.format
+      )
+    : "";
+  useEffect(() => {
+    const getPdfPageWidth = props.pdfOriginalWH.find(
+      (data) => data.pageNumber === props.widgetPageNum
+    );
+    setContainerScale(props.containerWH.width / getPdfPageWidth.width);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.containerWH.width, props.pdfOriginalWH]);
+  useEffect(() => {
+    if (props?.pos?.type === "date") {
+      const isDateChange = true;
+      const dateObj = {
+        date: startDate,
+        format: getDefaultFormat(props.pos?.options?.validation?.format)
+      };
+      handleSaveDate(dateObj, isDateChange); //function to save date and format in local array
+    }
+  }, [widgetData]);
+
+  //function is used to convert date according to selected format
+  const handleGetFormatDate = (data, isDateChange, isNewDate) => {
+    const format =
+      data?.format ||
+      selectDate?.format ||
+      props.pos?.options?.validation?.format;
+    const isSpecialDateFormat =
+      data?.format &&
+      ["dd-MM-yyyy", "dd.MM.yyyy", "dd/MM/yyyy"].includes(format);
+    let updateDate = data.date;
+    let date = "";
+    if (isSpecialDateFormat && updateDate) {
+      date = isDateChange
+        ? moment(updateDate).format(changeDateToMomentFormat(format))
+        : updateDate;
+    } else if (updateDate) {
+      //using moment package is used to change date as per the format provided in selectDate obj e.g. - MM/dd/yyyy -> 03/12/2024
+      const newDate = new Date(updateDate);
+      date = moment(newDate.getTime()).format(changeDateToMomentFormat(format));
+    } else if (isNewDate) {
+      //using moment package is used to change date as per the format provided in selectDate obj e.g. - MM/dd/yyyy -> 03/12/2024
+      const newDate = new Date();
+      date = moment(newDate.getTime()).format(changeDateToMomentFormat(format));
+    }
+    setSelectDate({ date: date, format: format });
+    return date;
+  };
+  const saveDateSetting = (data) => {
+    if (formdata?.isReadOnly && !selectDate.date && !isToday) {
+      alert(t("read-only-date-error"));
+      return;
+    }
+    handleSaveDate(data);
+    setIsDateModal(false);
+    props.setFontColor("");
+    props.setFontSize("");
+  };
+  //function to save date and format on local array onchange date and onclick format
+  const handleSaveDate = (data, isDateChange) => {
+    const date =
+      props.isPlaceholder && isToday
+        ? "today"
+        : handleGetFormatDate(data, isDateChange);
+    //`onChangeInput` is used to save data related to date in a placeholder field
+    const format =
+      data?.format ||
+      selectDate?.format ||
+      props.pos?.options?.validation?.format;
+    onChangeInput(
+      date,
+      props.pos,
+      props.xyPosition,
+      props.index,
+      props.setXyPosition,
+      props.data && props.data.Id,
+      false,
+      format,
+      props.fontSize || props.pos?.options?.fontSize || 12,
+      props.fontColor || props.pos?.options?.fontColor || "black",
+      formdata,
+    );
+  };
+  //Date-picker- accept date - Thu Dec 30 2025 00:00:00 GMT+0530 (India Standard Time)
+  //if date have in this format - "30/12/2025"
+  //then first need to be convert in this format - Tue Dec 30 2025 00:00:00 GMT+0530 (India Standard Time)
+  //Using moment -  moment("30/12/2025", "DD/MM/YYYY").toDate();
+
+  //moment package where we show date according to format in list
+  //it support date in this type - "2025-09-11"// ISO string, "2025-09-11T14:30:00" // ISO datetime
+  //function change format array list with selected date and format
+  const changeDateFormat = () => {
+    const updateDate = [];
+    dateFormat.map((data) => {
+      let date = selectDate?.date || new Date();
+      const isString = typeof date === "string";
+      if (selectDate.format === "dd-MM-yyyy" && isString) {
+        const [day, month, year] = date.split("-");
+        date = new Date(`${year}-${month}-${day}`);
+      } else if (selectDate.format === "dd.MM.yyyy" && isString) {
+        const [day, month, year] = date.split(".");
+        date = new Date(`${year}.${month}.${day}`);
+      } else if (selectDate.format === "dd/MM/yyyy" && isString) {
+        const [day, month, year] = date.split("/");
+        date = new Date(`${year}/${month}/${day}`);
+      } else {
+        date = selectDate?.date ? new Date(selectDate?.date) : new Date();
+      }
+      const milliseconds = date.getTime();
+      const newDate = moment(milliseconds).format(data);
+      const dateObj = { date: newDate, format: selectFormat(data) };
+      updateDate.push(dateObj);
+    });
+    setDateFormatList(updateDate);
+  };
+
+  useEffect(() => {
+    if (props.isPlaceholder || isSelfSign) {
+      selectDate && changeDateFormat();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectDate]);
+
+  const handleOnClickPlaceholder = async () => {
+    props?.setIsReqSignTourDisabled && props?.setIsReqSignTourDisabled(true);
+    //'props.isOpenSignPad' variable is used to check flow to open signature pad for finish document
+    //request sign, signyourself, selfsign,public-sign, kiosk mode
+    if (
+      props.isOpenSignPad &&
+      !props.isDragging &&
+      !props.pos.options?.isReadOnly &&
+      props?.data?.Role !== "prefill" &&
+      props.data?.Id === props.uniqueId
+    ) {
+      props.setCurrWidgetsDetails &&
+        props.setCurrWidgetsDetails({
+          ...props.pos,
+          pageNumber: props.widgetPageNum
+        });
+      if (props?.ispublicTemplate) {
+        props.handleUserDetails();
+      } else {
+          if (props?.isNeedSign) {
+            //funcion is used to highlight widgets on top when click any widget if two widgets on overlap
+            const getCurrentSignerPos = props.xyPosition.find(
+              (x) => x.Id === props.uniqueId
+            );
+            const updateZindex = handleHeighlightWidget(
+              getCurrentSignerPos,
+              props.pos.key,
+              props.widgetPageNum
+            );
+            const updatesignerPos = props.xyPosition.map((x) =>
+              x.Id === props.uniqueId ? { ...x, placeHolder: updateZindex } : x
+            );
+            props.setXyPosition(updatesignerPos);
+          }
+          props?.closeWidgetTour?.();
+          dispatch(setIsShowModal({ [props.pos.key]: true }));
+      }
+    }
+    //placeholder, template flow
+    else if (props.isPlaceholder && !props.isDragging) {
+      props.setCurrWidgetsDetails &&
+        props.setCurrWidgetsDetails({
+          ...props.pos,
+          pageNumber: props.widgetPageNum
+        });
+      if (props?.data?.Role !== "prefill") {
+        //this condition is used open signers attach modal but it should only open when widgets already selected
+        if (props?.currWidgetsDetails?.key === props.pos?.key) {
+          props.handleLinkUser(props.data.Id);
+        }
+        props.setUniqueId && props.setUniqueId(props.data.Id);
+        props?.setRoleName("");
+      } else if (props?.data?.Role === "prefill") {
+        props?.handleClosePrefillTour?.();
+        props?.closeWidgetTour?.();
+        dispatch(setIsShowModal({ [props.pos.key]: true }));
+        props.setUniqueId(props?.data?.Id);
+        props?.setRoleName("prefill");
+      }
+    }
+  };
+  //`handleOnClickSettingIcon` is used set current widget details and open setting of it
+  const handleOnClickSettingIcon = () => {
+    if (props.pos.type === radioButtonWidget) {
+      props.setIsRadio(true);
+    } else if (props.pos.type === "dropdown") {
+      props?.setShowDropdown(true);
+    } else if (props.pos.type === "checkbox") {
+      props?.setIsCheckbox(true);
+    }
+    // cells widget settings in sign yourself flow
+    else if (props.pos.type === cellsWidget && isSelfSign) {
+      props.handleCellSettingModal && props.handleCellSettingModal();
+    }
+    //condition to handle setting icon for signyour-self flow for all type text widgets
+    else if (
+      [
+        textInputWidget,
+        textWidget,
+        "name",
+        "company",
+        "job title",
+        "email"
+      ].includes(props.pos.type) &&
+      isSelfSign
+    ) {
+      props.handleTextSettingModal(true);
+    }
+    else {
+      props?.handleNameModal && props?.handleNameModal(true);
+    }
+
+    //condition for only placeholder and template flow
+    if (props.data && props?.data?.Role !== "prefill") {
+      props.setUniqueId(props?.data?.Id);
+      const checkIndex = props.xyPosition
+        .filter((data) => data?.Role !== "prefill")
+        .findIndex((data) => data.Id === props.data.Id);
+      props.setIsSelectId && props.setIsSelectId(checkIndex || 0);
+    } else if (
+      !props.isSelfSign &&
+      props.data &&
+      props.pos.type === "prefill"
+    ) {
+      props.setUniqueId(props?.data?.Id);
+    }
+    props?.setCurrWidgetsDetails?.({
+      ...props.pos,
+      pageNumber: props.widgetPageNum
+    });
+  };
+  //function to set required state value onclick on widget's copy icon
+  const handleCopyPlaceholder = (e) => {
+    e.stopPropagation();
+    //condition to handle text widget signer obj id and unique id
+    //when user click on copy icon of text widget in that condition text widget does not have any signerObjId
+    if (props.data && props?.data?.Role !== "prefill") {
+      props.setUniqueId(props?.data?.Id);
+      const checkIndex = props.xyPosition
+        .filter((data) => data?.Role !== "prefill")
+        .findIndex((data) => data.Id === props.data.Id);
+      props.setIsSelectId && props.setIsSelectId(checkIndex || 0);
+    } else if (
+      !props.isSelfSign &&
+      props.data &&
+      props.pos.type === "prefill"
+    ) {
+      props.setUniqueId(props?.data?.Id);
+    }
+    props.setIsPageCopy(true);
+    props?.setCurrWidgetsDetails?.({
+      ...props.pos,
+      pageNumber: props.widgetPageNum
+    });
+  };
+
+  const setCellCount = (key, newCount) => {
+    props.setXyPosition((prev) => {
+      const isSignerList = prev.some((d) => d.signerPtr);
+      if (isSignerList) {
+        const signerId = props.data?.Id || props.uniqueId;
+        const filterSignerPos = prev.filter((d) => d.Id === signerId);
+        if (filterSignerPos.length > 0) {
+          const getPlaceHolder = filterSignerPos[0].placeHolder;
+          const updatedPlaceHolder = getPlaceHolder.map((ph) => {
+            if (ph.pageNumber !== props.widgetPageNum) return ph;
+            const newPos = ph.pos.map((p) =>
+              p.key === key
+                ? { ...p, options: { ...p.options, cellCount: newCount } }
+                : p
+            );
+            return { ...ph, pos: newPos };
+          });
+          return prev.map((obj) =>
+            obj.Id === signerId
+              ? { ...obj, placeHolder: updatedPlaceHolder }
+              : obj
+          );
+        }
+      } else {
+        const updatePos = prev[props.index].pos.map((p) =>
+          p.key === key
+            ? { ...p, options: { ...p.options, cellCount: newCount } }
+            : p
+        );
+        return prev.map((obj, ind) =>
+          ind === props.index ? { ...obj, pos: updatePos } : obj
+        );
+      }
+      return prev;
+    });
+  };
+  const PlaceholderIcon = () => {
+    const isSettingForCells =
+      props?.isAlllowModify && !props?.assignedWidgetId.includes(props.pos.key)
+        ? []
+        : [cellsWidget];
+
+    // 1- If props.isShowBorder is true, display border's icon for all widgets. OR
+    // 2- Use the combination of props?.isAlllowModify and !props?.assignedWidgetId.includes(props.pos.key) to determine when to show border's icon:
+    //    1- When isAlllowModify is true, show border's icon.
+    //    2- Do not display border's icon for widgets already assigned (props.assignedWidgetId.includes(props.pos.key) is true).
+    return (
+      (props.isShowBorder ||
+        (props?.isAlllowModify &&
+          !props?.assignedWidgetId.includes(props.pos.key))) && (
+        <>
+          {(props.isPlaceholder ||
+            props.isSignYourself ||
+            props.isSelfSign) && (
+            <>
+              {/* condition to add setting icon for signyour-self flow for particular text widgets
+            and also it have diffrent position 
+            */}
+              {[
+                "checkbox",
+                textInputWidget,
+                textWidget,
+                "name",
+                "company",
+                "job title",
+                "email",
+                ...isSettingForCells
+              ].includes(props.pos.type) && isSelfSign ? (
+                <i
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    handleOnClickSettingIcon();
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOnClickSettingIcon();
+                  }}
+                  onTouchEnd={(e) => {
+                    e.stopPropagation();
+                    handleOnClickSettingIcon();
+                  }}
+                  className="fa-light fa-gear icon text-[#188ae2] right-[29px] -top-[19px] z-[99] pointer-events-auto"
+                ></i>
+              ) : (
+                /* condition to add setting icon for placeholder & template flow for all widgets except signature and date */
+                !props.isSignYourself &&
+                !props.isSelfSign &&
+                props?.pos?.type &&
+                !["date"].includes(props.pos.type) && (
+                  <i
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      handleOnClickSettingIcon();
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOnClickSettingIcon();
+                    }}
+                    onTouchEnd={(e) => {
+                      e.stopPropagation();
+                      handleOnClickSettingIcon();
+                    }}
+                    className="fa-light fa-gear icon text-[#188ae2] -top-[19px] z-[99] pointer-events-auto"
+                    style={{
+                      right: props?.data?.Role === "prefill" ? "32px" : "51px"
+                    }}
+                  ></i>
+                )
+              )}
+              {/* condition for usericon to display for all widgets except prefill widgets, signyour-self and self-sign flow */}
+              {!props.isSignYourself &&
+                !props.isSelfSign &&
+                props?.data?.Role !== "prefill" && (
+                  <i
+                    data-tut="assignSigner"
+                    className="fa-light fa-user icon text-[#188ae2] right-[32px] -top-[18px]"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      props.handleLinkUser(props.data.Id);
+                      props.setUniqueId(props.data.Id);
+                      const checkIndex = props.xyPosition.findIndex(
+                        (data) => data.Id === props.data.Id
+                      );
+                      props.setIsSelectId(checkIndex || 0);
+                    }}
+                    onTouchEnd={(e) => {
+                      e.stopPropagation();
+                      props.handleLinkUser(props.data.Id);
+                      props.setUniqueId(props.data.Id);
+                      const checkIndex = props.xyPosition.findIndex(
+                        (data) => data.Id === props.data.Id
+                      );
+                      props.setIsSelectId(checkIndex || 0);
+                    }}
+                  ></i>
+                )}
+            </>
+          )}
+          {/* setting icon only for date widgets */}
+          {props.pos.type === "date" && selectDate && (
+            <i
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                props?.setCurrWidgetsDetails?.({
+                  ...props.pos,
+                  pageNumber: props.widgetPageNum
+                });
+                setIsDateModal(!isDateModal);
+                e.stopPropagation();
+                setClickonWidget(props.pos);
+                if (props.data) {
+                  props?.setCurrWidgetsDetails?.({
+                    ...props.pos,
+                    pageNumber: props.widgetPageNum
+                  });
+                  props.setUniqueId(props.data.Id);
+                  const checkIndex = props.xyPosition.findIndex(
+                    (data) => data.Id === props.data.Id
+                  );
+                  props.setIsSelectId(checkIndex || 0);
+                }
+              }}
+              onTouchEnd={(e) => {
+                props?.setCurrWidgetsDetails?.({
+                  ...props.pos,
+                  pageNumber: props.widgetPageNum
+                });
+                e.stopPropagation();
+                setIsDateModal(!isDateModal);
+                if (props.data) {
+                  props?.setCurrWidgetsDetails?.({
+                    ...props.pos,
+                    pageNumber: props.widgetPageNum
+                  });
+                  props.setUniqueId(props.data.Id);
+                  const checkIndex = props.xyPosition.findIndex(
+                    (data) => data.Id === props.data.Id
+                  );
+                  props.setIsSelectId(checkIndex || 0);
+                }
+              }}
+              style={{
+                right:
+                  props.isPlaceholder && props?.data?.Role !== "prefill"
+                    ? "50px"
+                    : "30px"
+              }}
+              className="fa-light fa-gear icon text-[#188ae2] text-[14px] z-[99] -top-[18px] pointer-events-auto"
+            ></i>
+          )}
+          {/* copy icon for all widgets */}
+          <i
+            className="fa-light fa-copy icon text-[#188ae2] right-[12px] -top-[18px] "
+            onClick={(e) => handleCopyPlaceholder(e)}
+            onTouchEnd={(e) => handleCopyPlaceholder(e)}
+          ></i>
+          {/* delete icon for all widgets */}
+          <i
+            className="fa-light fa-trash-can icon text-[#188ae2] -right-[8px] -top-[18px] "
+            onClick={(e) => {
+              e.stopPropagation();
+              showGuidelines(false);
+              //condition for template and placeholder flow
+              if (props.data) {
+                props.handleDeleteWidget(
+                  props.pos.key,
+                  props.data.Id,
+                  props.widgetPageNum
+                );
+              }
+              //condition for signyour-self flow
+              else {
+                props.handleDeleteWidget(
+                  props.pos.key,
+                  null,
+                  props.widgetPageNum
+                );
+              }
+            }}
+            //for mobile and tablet touch event
+            onTouchEnd={(e) => {
+              e.stopPropagation();
+              showGuidelines(false);
+              //condition for template and placeholder flow
+              if (props.data) {
+                props.handleDeleteWidget(
+                  props.pos.key,
+                  props.data?.Id,
+                  props.widgetPageNum
+                );
+              }
+              //condition for signyour-self flow
+              else {
+                props.handleDeleteWidget(
+                  props.pos.key,
+                  null,
+                  props.widgetPageNum
+                );
+              }
+            }}
+          ></i>
+        </>
+      )
+    );
+  };
+  const xPos = (pos) => {
+    const containerScale = getContainerScale(
+      props.pdfOriginalWH,
+      props.pageNumber,
+      props.containerWH
+    );
+    const resizePos = pos.xPosition;
+
+    return resizePos * containerScale; // ✅ desktop: account for Page scale
+  };
+
+  const yPos = (pos) => {
+    const containerScale = getContainerScale(
+      props.pdfOriginalWH,
+      props.pageNumber,
+      props.containerWH
+    );
+    const resizePos = pos.yPosition;
+
+    return resizePos * containerScale; // ✅ desktop fix
+  };
+
+  // function to calculate font size
+  const calculateFont = (size, isMinHeight) => {
+    const containerScale = getContainerScale(
+      props.pdfOriginalWH,
+      props.widgetPageNum,
+      props.containerWH
+    );
+    const fontSize = (size || 12) * containerScale;
+    // isMinHeight to set text box minimum height
+    if (isMinHeight) {
+      return fontSize * 1.5 + "px";
+    } else {
+      return fontSize + "px";
+    }
+  };
+
+  const getCursor = () => {
+    if (props.data && props.isNeedSign) {
+      if (props?.signerObjId && props.data?.signerObjId === props.signerObjId) {
+        return "pointer";
+      } else if (props?.uniqueId && props.data?.Id === props.uniqueId) {
+        return "pointer";
+      } else {
+        return "not-allowed";
+      }
+    } else {
+      return "move";
+    }
+  };
+
+  const fontSize = calculateFont(props.pos.options?.fontSize);
+  const fontColor = props.pos.options?.fontColor || "black";
+
+  const handleDragging = () => {
+    //condition for request signing flow
+    if (props.isNeedSign) {
+      //enable dragging functionality only if isAlllowModify true on tab that widget and hold 1sec
+      if (
+        props.isAlllowModify &&
+        !props?.assignedWidgetId.includes(props.pos.key) &&
+        props.data?.signerObjId === props.signerObjId
+      ) {
+        return false;
+      } else {
+        //if 'isAlllowModify' is false then disbale dragging functionality
+        return true;
+      }
+    } else {
+      return false;
+    }
+  };
+
+  const handleChangeFormat = (e) => {
+    const selectedIndex = e.target.value;
+    e.stopPropagation();
+    if (
+      props?.isPlaceholder &&
+      props?.data?.Role !== "prefill" &&
+      !selectDate?.date
+    ) {
+      setSelectDate((prev) => ({
+        ...prev,
+        format: dateFormatList[selectedIndex]?.format
+      }));
+    } else {
+      if (
+        props?.data?.Role === "prefill" &&
+        (formdata.status === "optional" || props.pos?.status === "optional")
+      ) {
+        setSelectDate({
+          date: "",
+          format: dateFormatList[selectedIndex]?.format
+        });
+        return;
+      }
+
+      setSelectDate(dateFormatList[selectedIndex]);
+    }
+  };
+  const handleClearDate = () => {
+    setIsToday(false);
+    setSelectDate((prev) => ({ ...prev, date: "" }));
+  };
+  const handleCloseDateModal = () => {
+    setIsDateModal(false);
+  };
+  const handleDateStatus = (data) => {
+    if (data === "Optional" && props?.data?.Role === "prefill") {
+      setSelectDate((prev) => ({ ...prev, date: "" }));
+    } else if (
+      props?.data?.Role === "prefill" &&
+      data === "Required" &&
+      props?.pos?.options?.status === "optional"
+    ) {
+      const isNewDate = true;
+      handleGetFormatDate(selectDate, null, isNewDate);
+    }
+    setFormdata({
+      ...formdata,
+      status: data.toLowerCase()
+    });
+  };
+
+
+  return (
+    <>
+      {/*  Check if a text widget (prefill type) exists. Once the user enters a value and clicks outside or the widget becomes non-selectable, it should appear as plain text (just like embedded text in a document). When the user clicks on the text again, it should become editable. */}
+      {props.pos?.options?.response &&
+      props.pos.key !== props?.currWidgetsDetails?.key &&
+      props.pos.type === textWidget ? (
+        <span
+          readOnly
+          onClick={(e) => {
+            // Prevent the click from bubbling up to the Document onClick handler
+            // which would immediately clear currWidgetsDetails and make the
+            // widget appear non-clickable after a response has been saved.
+            e.stopPropagation();
+            if (props?.ispublicTemplate) return;
+            props.setCurrWidgetsDetails &&
+              props?.setCurrWidgetsDetails?.({
+                ...props.pos,
+                pageNumber: props.widgetPageNum
+              });
+            props?.setRoleName && props?.setRoleName("prefill");
+            props.setUniqueId && props.setUniqueId(props?.data?.Id);
+          }}
+          style={{
+            fontFamily: "Arial, sans-serif",
+            position: "absolute",
+            left: xPos(props.pos),
+            top: yPos(props.pos),
+            ...(props.pos?.Width ? { width: props.pos?.Width - 5 } : {}),
+            ...(props.pos?.Height ? { height: props.pos?.Height } : {}),
+            fontSize: fontSize,
+            color: fontColor,
+            zIndex: 99,
+            cursor: getCursor(),
+            resize: "none",
+            background: "transparent",
+            width: props.posWidth(props.pos),
+            height: props.pos?.Height,
+            whiteSpace: "pre-wrap",
+            overflow: "visible",
+            outline: "none",
+            border: "none"
+          }}
+        >
+          {
+                props.pos?.options?.response
+          }
+        </span>
+      ) : (
+        <Rnd
+          id={props.pos.key}
+          scale={props.scale}
+          data-tut={props.pos.key === props.unSignedWidgetId ? "IsSigned" : ""}
+          key={props.pos.key}
+          cancel=".cell-size-handle, .icon"
+          lockAspectRatio={
+            props?.isAlllowModify &&
+            !props?.assignedWidgetId.includes(props.pos.key)
+              ? false
+              : !props.isFreeResize &&
+                (props.pos.Width
+                  ? [90, 270].includes(props.pos.options?.rotation)
+                    ? props.pos.Height / props.pos.Width
+                    : props.pos.Width / props.pos.Height
+                  : [90, 270].includes(props.pos.options?.rotation)
+                    ? defaultWidthHeight(props.pos.type).height /
+                      defaultWidthHeight(props.pos.type).width
+                    : defaultWidthHeight(props.pos.type).width /
+                      defaultWidthHeight(props.pos.type).height)
+          }
+          enableResizing={{
+            top: false,
+            right: false,
+            bottom: false,
+            left: false,
+            topRight: false,
+            bottomRight:
+              props.data && props.isNeedSign
+                ? props.data?.signerObjId === props.signerObjId &&
+                  props.pos.type !== "checkbox" &&
+                  props.pos.type !== radioButtonWidget
+                  ? true
+                  : false
+                : props.pos.type !== radioButtonWidget &&
+                  props.pos.type !== "checkbox" &&
+                  props.pos.key === props?.currWidgetsDetails?.key &&
+                  true,
+            bottomLeft: false,
+            topLeft: false
+          }}
+          bounds="parent"
+          className="signYourselfBlock"
+          style={{
+            border: "1.5px solid #007bff",
+            borderRadius: "2px",
+            cursor: getCursor(),
+            zIndex:
+              props.pos.key === props?.currWidgetsDetails?.key
+                ? props.pos.type === "date"
+                  ? 100
+                  : 99
+                : props?.pos?.zIndex
+                  ? props.pos.zIndex
+                  : "5",
+            opacity:
+              props.isNeedSign && props.data?.Id !== props?.uniqueId && "0.4",
+            background:
+              props?.data?.Role === "prefill"
+                ? "transparent"
+                : handleBackground(
+                    props?.data,
+                    props?.isNeedSign,
+                    props?.uniqueId
+                  )
+          }}
+          onDrag={(_, d) => {
+            props?.handleTabDrag?.(props.pos.key);
+            showGuidelines(
+              true,
+              d.x,
+              d.y,
+              d.node.offsetWidth,
+              d.node.offsetHeight,
+              props.widgetPageNum
+            );
+          }}
+          size={{
+            width:
+              props.pos.type === radioButtonWidget ||
+              props.pos.type === "checkbox"
+                ? "auto"
+                : [90, 270].includes(props.pos.options?.rotation)
+                  ? props.posHeight(props.pos)
+                  : props.posWidth(props.pos),
+            height:
+              props.pos.type === radioButtonWidget ||
+              props.pos.type === "checkbox"
+                ? "auto"
+                : [90, 270].includes(props.pos.options?.rotation)
+                  ? props.posWidth(props.pos)
+                  : props.posHeight(props.pos)
+          }}
+          minHeight={
+            props.pos.type === cellsWidget
+              ? calculateFont(props.pos.options?.fontSize, true)
+              : props.pos.type !== "checkbox" &&
+                calculateFont(props.pos.options?.fontSize, true)
+          }
+          maxHeight="auto"
+          onResizeStart={(e, dir, ref) => {
+            props?.setIsResize?.(true);
+            showGuidelines(
+              true,
+              xPos(props.pos),
+              yPos(props.pos),
+              ref.offsetWidth,
+              ref.offsetHeight,
+              props.widgetPageNum
+            );
+          }}
+          onResize={(e, dir, ref, delta, position) => {
+            showGuidelines(
+              true,
+              position.x,
+              position.y,
+              ref.offsetWidth,
+              ref.offsetHeight,
+              props.widgetPageNum
+            );
+          }}
+          onResizeStop={(e, direction, ref) => {
+            setTimeout(() => props?.setIsResize?.(false), 50);
+            props?.handleWidgetResize?.(
+              ref,
+              props.pos.key,
+              props.xyPosition,
+              props.setXyPosition,
+              props.index,
+              containerScale,
+              props.data && props.data.Id,
+              props.isResize
+            );
+            showGuidelines(false);
+          }}
+          onDragStop={(event, dragElement) => {
+            if (props?.isDragging) {
+              showGuidelines(false);
+            }
+            props?.handleStop?.(
+              event,
+              dragElement,
+              props.data?.Id,
+              props.pos?.key,
+              props.widgetPageNum
+            );
+          }}
+          position={{
+            x: xPos(props.pos),
+            y: yPos(props.pos)
+          }}
+          disableDragging={handleDragging()}
+        >
+          {props.pos.key === props?.currWidgetsDetails?.key &&
+          ((props.isShowBorder &&
+            ![radioButtonWidget, "checkbox"].includes(props.pos.type)) ||
+            (props?.isAlllowModify &&
+              !props?.assignedWidgetId.includes(props.pos.key))) ? (
+            <BorderResize
+              right={-12}
+              top={-11}
+              pos={props.pos}
+              posHeight={props.posHeight}
+              isSignYourself={isSelfSign}
+            />
+          ) : props.data &&
+            props.isNeedSign &&
+            props.pos.type !== "checkbox" ? (
+            props.data?.signerObjId === props.signerObjId &&
+            ![radioButtonWidget, "checkbox"].includes(props.pos.type) ? (
+              <BorderResize
+                posHeight={props.posHeight}
+                isSignYourself={props.isSignYourself || props.isSelfSign}
+                pos={props.pos}
+              />
+            ) : (
+              <></>
+            )
+          ) : (
+            ![radioButtonWidget, "checkbox"].includes(props.pos.type) &&
+            props.pos.key === props?.currWidgetsDetails?.key && <BorderResize />
+          )}
+
+          {/* 1- Show a ouline if props.pos.key === props?.currWidgetsDetails?.key, indicating the current user's selected widget.
+            2- If props.isShowBorder is true, display ouline for all widgets. 
+            3- Use the combination of props?.isAlllowModify and !props?.assignedWidgetId.includes(props.pos.key) to determine when to show ouline:
+              3.1- When isAlllowModify is true, show ouline.
+              3.2- Do not display ouline for widgets already assigned (props.assignedWidgetId.includes(props.pos.key) is true). 
+            */}
+          {props.pos.key === props?.currWidgetsDetails?.key &&
+            (props.isShowBorder ||
+              (props?.isAlllowModify &&
+                !props?.assignedWidgetId.includes(props.pos.key))) && (
+              <div
+                style={{ borderColor: themeColor }}
+                className="w-[calc(100%+21px)] h-[calc(100%+21px)] cursor-move absolute inline-block border-[1px] border-dashed"
+              ></div>
+            )}
+          <div
+            className="flex items-stretch justify-center"
+            style={{
+              left: xPos(props.pos),
+              top: yPos(props.pos),
+              width: "100%",
+              height: "100%",
+              zIndex: "10"
+            }}
+            onTouchEnd={() => handleOnClickPlaceholder()}
+            onClick={() => handleOnClickPlaceholder()}
+          >
+            {props.pos.key === props?.currWidgetsDetails?.key && (
+              <PlaceholderIcon />
+            )}
+            <PlaceholderType
+              pos={props.pos}
+              xyPosition={props.xyPosition}
+              index={props.index}
+              setXyPosition={props.setXyPosition}
+              data={props.data}
+              isShowDropdown={props?.isShowDropdown}
+              isPlaceholder={props.isPlaceholder}
+              isSignYourself={props.isSignYourself}
+              isSelfSign={props.isSelfSign}
+              signerObjId={props.signerObjId}
+              calculateFontsize={props.calculateFontsize}
+              pdfDetails={props?.pdfDetails && props?.pdfDetails[0]}
+              isNeedSign={props.isNeedSign}
+              isAllowModify={
+                props.isShowBorder ||
+                (props?.isAlllowModify &&
+                  !props?.assignedWidgetId.includes(props.pos.key))
+              }
+              selectDate={selectDate}
+              startDate={startDate}
+              xPos={props.xPos}
+              calculateFont={calculateFont}
+              setCellCount={setCellCount}
+              isPrefillModal={props?.isPrefillModal}
+            />
+          </div>
+        </Rnd>
+      )}
+      <DateWidgetModal isOpen={isDateModal} title={t("widget-info")}>
+        <div className="text-base-content h-[100%] p-[20px]">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveDateSetting(selectDate);
+            }}
+          >
+            <div className="flex flex-col gap-3">
+              {!isSelfSign && (
+                <div className="mb-[0.75rem] text-[13px] md:w-[60%] w-full">
+                  <label htmlFor="name">
+                    {t("name")}
+                    <span className="text-[red]"> *</span>
+                  </label>
+                  <input
+                    className="op-input op-input-bordered op-input-sm focus:outline-none hover:border-base-content w-full text-xs"
+                    name="name"
+                    value={formdata.name}
+                    onChange={(e) =>
+                      setFormdata({
+                        ...formdata,
+                        name: e.target.value
+                      })
+                    }
+                    onInvalid={(e) =>
+                      e.target.setCustomValidity(t("input-required"))
+                    }
+                    onInput={(e) => e.target.setCustomValidity("")}
+                    required
+                  />
+                </div>
+              )}
+              <div className="flex flex-col md:items-center md:flex-row gap-y-3">
+                <span className="capitalize">{t("format")} :</span>
+                <select
+                  className="op-select op-select-bordered op-select-sm focus:outline-none hover:border-base-content text-xs md:ml-4"
+                  value={selectedFormatIndex >= 0 ? selectedFormatIndex : ""}
+                  onChange={(e) => handleChangeFormat(e)}
+                >
+                  <option value="" disabled>
+                    {t("select-date-format")}
+                  </option>
+                  {dateFormatList.map((data, ind) => {
+                    return (
+                      <option className="text-[13px]" value={ind} key={ind}>
+                        {data?.date ? data?.date : "nodata"}
+                      </option>
+                    );
+                  })}
+                </select>
+                <span className="text-xs text-gray-400 ml-1 uppercase">
+                  {selectDate.format || props.pos?.options?.validation?.format}
+                </span>
+              </div>
+              {props?.data?.Role !== "prefill" && props?.isPlaceholder && (
+                <>
+                  <div className="flex flex-col md:flex-row md:items-center gap-2">
+                    <span>{t("default-date")} :</span>
+                    <DatePicker
+                      renderCustomHeader={({
+                        date,
+                        changeYear,
+                        changeMonth
+                      }) => (
+                        <div className="flex justify-start md:ml-2">
+                          <select
+                            className="bg-transparent outline-none"
+                            value={months[getMonth(date)]}
+                            onChange={({ target: { value } }) =>
+                              changeMonth(months.indexOf(value))
+                            }
+                          >
+                            {months.map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            className="bg-transparent outline-none"
+                            value={getYear(date)}
+                            onChange={({ target: { value } }) =>
+                              changeYear(value)
+                            }
+                          >
+                            {years.map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      closeOnScroll={true}
+                      selected={getDefaultDate(
+                        selectDate?.date,
+                        selectDate?.format
+                      )}
+                      popperPlacement="top-end"
+                      customInput={<DatePickerCustomInput />}
+                      onChange={(date) => {
+                        setIsToday(false);
+                        const isDateChange = true;
+                        const dateObj = {
+                          date: date,
+                          format: selectDate.format
+                        };
+                        handleGetFormatDate(dateObj, isDateChange);
+                      }}
+                      dateFormat={
+                        selectDate
+                          ? selectDate?.format
+                          : props.pos?.options?.validation?.format
+                            ? props.pos?.options?.validation?.format
+                            : "MM/dd/yyyy"
+                      }
+                      portalId="root-portal"
+                    />
+                    <label className="flex items-center gap-1 cursor-pointer mb-0">
+                      <input
+                        checked={isToday}
+                        type="checkbox"
+                        className="op-checkbox op-checkbox-xs"
+                        onClick={() => {
+                          setSelectDate((prev) => ({ ...prev, date: "" }));
+                          setIsToday(!isToday);
+                        }}
+                      />
+                      <span className="ml-[2px]">{t("set-today")}</span>
+                    </label>
+                    <span
+                      onClick={() => handleClearDate()}
+                      className="underline text-blue-500 cursor-pointer ml-2"
+                    >
+                      {t("clear")}
+                    </span>
+                  </div>
+                </>
+              )}
+              {!isSelfSign && (
+                <div className="flex flex-row items-center gap-[10px]">
+                  {statusArr.map((data, ind) => {
+                    return (
+                      <div
+                        key={ind}
+                        className="flex flex-row gap-[5px] items-center"
+                      >
+                        <input
+                          className="mr-[2px] op-radio op-radio-xs"
+                          type="radio"
+                          name="status"
+                          onChange={() => handleDateStatus(data)}
+                          checked={
+                            formdata.status.toLowerCase() === data.toLowerCase()
+                          }
+                        />
+                        <div className="text-[13px]">
+                          {t(`widget-status.${data}`)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="flex flex-col md:flex-row gap-y-2 md:gap-y-0 gap-x-2">
+                <div className="flex flex-row items-center">
+                  <span className="capitalize">{t("font-size")} :</span>
+                  <select
+                    className="ml-[3px] md:ml:[7px] op-select op-select-bordered op-select-sm focus:outline-none hover:border-base-content text-xs"
+                    value={
+                      props.fontSize || clickonWidget.options?.fontSize || 12
+                    }
+                    onChange={(e) =>
+                      props.setFontSize(parseInt(e.target.value))
+                    }
+                  >
+                    {fontsizeArr.map((size, ind) => (
+                      <option className="text-[13px]" value={size} key={ind}>
+                        {size}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-row gap-1 items-center">
+                  <span className="capitalize">{t("color")} :</span>
+                  <select
+                    value={
+                      props.fontColor ||
+                      clickonWidget.options?.fontColor ||
+                      "black"
+                    }
+                    onChange={(e) => props.setFontColor(e.target.value)}
+                    className="ml-[4px] md:ml[7px] op-select op-select-bordered op-select-sm focus:outline-none hover:border-base-content text-xs"
+                  >
+                    {fontColorArr.map((color, ind) => (
+                      <option value={color} key={ind}>
+                        {t(`color-type.${color}`)}
+                      </option>
+                    ))}
+                  </select>
+                  <span
+                    style={{
+                      background:
+                        props.fontColor ||
+                        props.pos.options?.fontColor ||
+                        "black"
+                    }}
+                    className="w-5 h-[19px] ml-1"
+                  ></span>
+                </div>
+              </div>
+              {props?.isPlaceholder && props?.data?.Role !== "prefill" && (
+                <>
+                  <div className="flex items-center gap-1 w-max">
+                    <input
+                      name="isReadOnly"
+                      id="isReadOnly"
+                      type="checkbox"
+                      checked={formdata?.isReadOnly}
+                      className="op-checkbox op-checkbox-xs"
+                      onChange={() =>
+                        setFormdata({
+                          ...formdata,
+                          isReadOnly: !formdata?.isReadOnly
+                        })
+                      }
+                    />
+                    <label
+                      htmlFor="isReadOnly"
+                      className="capitalize ml-[2px] mb-0 cursor-pointer"
+                    >
+                      {t("read-only")}
+                    </label>
+                  </div>
+                  <div className="mb-[0.75rem]">
+                    <label htmlFor="hint" className="text-[13px]">
+                      {t("hint")}
+                    </label>
+                    <input
+                      maxLength={40}
+                      className="op-input op-input-bordered op-input-sm focus:outline-none hover:border-base-content w-full text-xs"
+                      name="hint"
+                      placeholder={"Enter date hint"}
+                      value={formdata?.hint}
+                      onChange={(e) =>
+                        setFormdata({
+                          ...formdata,
+                          hint: e.target?.value
+                        })
+                      }
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="h-[1px] w-full my-[15px] bg-[#9f9f9f]"></div>
+            <button className="op-btn op-btn-primary" type="submit">
+              {t("save")}
+            </button>
+            <button
+              type="button"
+              className="op-btn op-btn-ghost text-base-content ml-1"
+              onClick={() => handleCloseDateModal()}
+            >
+              {t("cancel")}
+            </button>
+          </form>
+        </div>
+      </DateWidgetModal>
+    </>
+  );
+}
+
+export default Placeholder;
