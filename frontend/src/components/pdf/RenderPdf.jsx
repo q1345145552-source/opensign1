@@ -6,6 +6,7 @@ import React, {
   useEffect
 } from "react";
 import { Document, Page } from "react-pdf";
+import { pdfJsOptions } from "../../constant/pdfJsOptions";
 import {
   defaultWidthHeight,
   getContainerScale,
@@ -950,6 +951,7 @@ function RenderPdf(props) {
                 showCanvasGuidelines(false);
               }}
               file={pdfDataBase64}
+              options={pdfJsOptions}
             >
               {Array.from({ length: totalPages }, (_, i) => i + 1).map(
                 (pageNum) => (

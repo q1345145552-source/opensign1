@@ -2,6 +2,7 @@ import React from "react";
 import { Document, Page } from "react-pdf";
 import { Stage, Layer, Rect, Text } from "react-konva";
 import { useTranslation } from "react-i18next";
+import { pdfJsOptions } from "../constant/pdfJsOptions";
 const RenderDebugPdf = (props) => {
   const { t } = useTranslation();
   return (
@@ -19,6 +20,7 @@ const RenderDebugPdf = (props) => {
           error={<p className="mx-2">{t("failed-to-load-refresh-page")}</p>}
           onLoadSuccess={props.pageDetails}
           ref={props.pdfRef}
+          options={pdfJsOptions}
           file={props.pdfUrl}
         >
           <Page

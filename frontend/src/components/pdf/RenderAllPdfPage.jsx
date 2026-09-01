@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Document, Page } from "react-pdf";
 import { useSelector } from "react-redux";
 import { PDFDocument } from "pdf-lib";
+import { pdfJsOptions } from "../../constant/pdfJsOptions";
 import {
   base64ToArrayBuffer,
   decryptPdf,
@@ -186,6 +187,7 @@ function RenderAllPdfPage(props) {
           error=""
           loading={t("loading-doc")}
           onLoadSuccess={onDocumentLoad}
+          options={pdfJsOptions}
           file={pdfDataBase64}
         >
           {Array.from(new Array(props?.allPages), (el, index) => (
