@@ -19,6 +19,9 @@ export default async function GenerateCertificate(docDetails) {
   const fontBytes = fs.readFileSync('./font/times.ttf'); //
   pdfDoc.registerFontkit(fontkit);
   const timesRomanFont = await pdfDoc.embedFont(fontBytes, { subset: true });
+  // 中文字体，用于文档名称、公司名称、签署人姓名等中文内容
+  const cjkFontBytes = fs.readFileSync('./font/NotoSansSC-Regular.otf');
+  const cjkFont = await pdfDoc.embedFont(cjkFontBytes, { subset: true });
   const pngUrl = fs.readFileSync('./images/logo.png').buffer;
   const naSignUrl = fs.readFileSync('./images/na_sign.png').buffer;
   const nasign = await pdfDoc.embedPng(naSignUrl);
@@ -171,7 +174,7 @@ export default async function GenerateCertificate(docDetails) {
     x: 130,
     y: 690,
     size: docDetails?.Name?.length >= 78 ? 12 : text,
-    font: timesRomanFont,
+    font: cjkFont,
     color: textValueColor,
   });
 
@@ -214,7 +217,7 @@ export default async function GenerateCertificate(docDetails) {
     x: 110,
     y: organizationY,
     size: text,
-    font: timesRomanFont,
+    font: cjkFont,
     color: textValueColor,
   });
   page.drawText('Created on :', {
@@ -280,7 +283,7 @@ export default async function GenerateCertificate(docDetails) {
     x: 105,
     y: nameY,
     size: text,
-    font: timesRomanFont,
+    font: cjkFont,
     color: textValueColor,
   });
   page.drawText('Email :', {
@@ -387,7 +390,7 @@ export default async function GenerateCertificate(docDetails) {
       x: 75,
       y: yPosition2,
       size: signertext,
-      font: timesRomanFont,
+      font: cjkFont,
       color: textValueColor,
     });
 
