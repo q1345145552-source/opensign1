@@ -14,7 +14,7 @@ const MailTemplateEditor = ({
   tenantId,
 }) => {
   const appName =
-    "OpenSign™";
+    "湘泰出海";
   const { t } = useTranslation();
   const dispatch = useDispatch();
   const [requestBody, setRequestBody] = useState({ basic: "", advanced: "" });

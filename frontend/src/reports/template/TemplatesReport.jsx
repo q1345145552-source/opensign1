@@ -53,7 +53,7 @@ const TemplatesReport = (props) => {
   const titleElement = useElSize(titleRef);
   const { prefillImg, isBulkLoader } = useSelector((state) => state.widget);
   const appName =
-    "OpenSign™";
+    "湘泰出海";
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();

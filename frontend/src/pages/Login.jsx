@@ -24,7 +24,7 @@ import SelectLanguage from "../components/pdf/SelectLanguage";
 
 function Login() {
   const appName =
-    "OpenSign™";
+    "湘泰出海";
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();

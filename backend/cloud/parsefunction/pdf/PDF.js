@@ -37,7 +37,7 @@ import {
 const serverUrl = cloudServerUrl; // process.env.SERVER_URL;
 const APPID = serverAppId;
 const masterKEY = process.env.MASTER_KEY;
-const eSignName = 'OpenSign';
+const eSignName = '湘泰出海';
 const eSigncontact = 'hello@opensignlabs.com';
 const docUrl = `${serverUrl}/classes/contracts_Document`;
 const headers = {

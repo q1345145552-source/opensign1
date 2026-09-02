@@ -28,7 +28,7 @@ import { useDispatch, useSelector } from "react-redux";
 
 const Preferences = () => {
   const appName =
-    "OpenSign™";
+    "湘泰出海";
   const { t } = useTranslation();
   const dispatch = useDispatch();
   const { isLoader, isTopLoader, alertInfo } = useSelector(

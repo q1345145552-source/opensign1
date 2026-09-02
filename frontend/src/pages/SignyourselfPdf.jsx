@@ -86,7 +86,7 @@ function SignYourSelf() {
   const { scrollRef } = useScroll();
   const isShowModal = useSelector((state) => state.widget.isShowModal);
   const appName =
-    "OpenSign™";
+    "湘泰出海";
   const divRef = useRef(null);
   const nodeRef = useRef(null);
   const pdfRef = useRef();

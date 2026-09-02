@@ -83,7 +83,7 @@ function GuestLogin() {
     localStorage.setItem("favicon", favicon);
     localStorage.setItem(
       "appname",
-        "OpenSign™"
+        "湘泰出海"
     );
     //save isGuestSigner true in local to handle login flow header in mobile view
     localStorage.setItem("isGuestSigner", true);

@@ -1,8 +1,8 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "OpenSign API v1",
-    "description": "This is API documentation for OpenSign API v1 based on the OpenAPI 3.1 specification. \n\nSome useful links:\n- [Official Website](https://www.opensignlabs.com)\n- [Github repo](https://github.com/opensignlabs/opensign)",
+    "title": "湘泰出海 API v1",
+    "description": "This is API documentation for 湘泰出海 API v1 based on the OpenAPI 3.1 specification. \n\nSome useful links:\n- [Official Website](https://www.opensignlabs.com)\n- [Github repo](https://github.com/opensignlabs/opensign)",
     "termsOfService": "http://www.opensignlabs.com/terms/",
     "contact": {
       "email": "contact@opensignlabs.com"
@@ -14,7 +14,7 @@
     "version": "1.0.0"
   },
   "externalDocs": {
-    "description": "Find out more about OpenSign",
+    "description": "Find out more about 湘泰出海",
     "url": "http://docs.opensignlabs.com"
   },
   "servers": [
@@ -24,7 +24,7 @@
   ],
   "tags": [
     {
-      "name": "OpenSign",
+      "name": "湘泰出海",
       "description": "OpenSource DocuSign alternative",
       "externalDocs": {
         "description": "Find out more",
