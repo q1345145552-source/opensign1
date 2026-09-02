@@ -106,9 +106,9 @@ export default async function GenerateCertificate(docDetails) {
   });
   page.drawImage(pngImage, {
     x: 30,
-    y: 790,
-    width: 100,
-    height: 25,
+    y: 775,
+    width: 50,
+    height: 50,
   });
 
   page.drawText(generatedOn, {

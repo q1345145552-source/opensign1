@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import assert from "node:assert/strict";
-import { describe, test } from "node:test";
+import { createHash } from "node:crypto";
+import { describe, test } from "vitest";
 
 const projectRoot = path.resolve(import.meta.dirname, "..");
 const englishPath = path.join(
@@ -25,6 +26,13 @@ const placeholders = (value) =>
   [...String(value).matchAll(/{{\s*[^}]+\s*}}/g)]
     .map(([token]) => token)
     .sort();
+
+const removeAllowedTechnicalReferences = (value) =>
+  String(value)
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/[\w.+-]+@opensignlabs\.com/gi, "")
+    .replace(/@opensign\/react/gi, "")
+    .replace(/opensign_hide_chat/gi, "");
 
 describe("Simplified Chinese localization", () => {
   test("registers Simplified Chinese in i18n and the language selector", () => {
@@ -97,6 +105,95 @@ describe("Simplified Chinese localization", () => {
         String(value),
         /(.{1,6})\1{3,}/u,
         `repeated translation fragment: ${key}`
+      );
+    }
+  });
+
+  test("does not expose legacy branding in translation values", () => {
+    for (const translationPath of [englishPath, chinesePath]) {
+      const translations = flatten(
+        JSON.parse(fs.readFileSync(translationPath, "utf8"))
+      );
+
+      for (const [key, value] of translations) {
+        assert.doesNotMatch(
+          removeAllowedTechnicalReferences(value),
+          /open\s*sign(?:™)?/iu,
+          `legacy branding in translation value: ${key}`
+        );
+      }
+    }
+  });
+
+  test("does not expose legacy branding in default user-facing content", () => {
+    const userFacingSources = [
+      "src/components/emailbuilder/getConfiguration/sample/request-email.ts",
+      "src/components/emailbuilder/getConfiguration/sample/completion-email.ts",
+      "src/constant/Utils.js",
+    ];
+
+    for (const sourcePath of userFacingSources) {
+      const source = fs.readFileSync(path.join(projectRoot, sourcePath), "utf8");
+      assert.doesNotMatch(
+        source,
+        /["'`]OpenSign™["'`]|not compatible with opensign/iu,
+        `legacy branding in user-facing source: ${sourcePath}`
+      );
+    }
+  });
+
+  test("uses the approved Xiangtai logo for default brand assets", () => {
+    const approvedLogoHash =
+      "b3fbb0b3962ea058885708cd55da03f7baa5d5bd89e2999cb8504f31d6c94cb2";
+    const logoPaths = [
+      "src/assets/images/logo.png",
+      "public/static/js/assets/images/logo-dark.png",
+      "public/xiangtai-logo.png",
+    ];
+
+    for (const logoPath of logoPaths) {
+      const absolutePath = path.join(projectRoot, logoPath);
+      assert.ok(fs.existsSync(absolutePath), `missing brand logo: ${logoPath}`);
+      const hash = createHash("sha256")
+        .update(fs.readFileSync(absolutePath))
+        .digest("hex");
+      assert.equal(hash, approvedLogoHash, `unexpected brand logo: ${logoPath}`);
+    }
+
+    const appInfoSource = fs.readFileSync(
+      path.join(projectRoot, "src/constant/appinfo.js"),
+      "utf8"
+    );
+    assert.match(appInfoSource, /fev_Icon:\s*logo/u);
+
+    const titleSource = fs.readFileSync(
+      path.join(projectRoot, "src/components/Title.jsx"),
+      "utf8"
+    );
+    assert.match(
+      titleSource,
+      /localStorage\.getItem\("favicon"\)\s*\|\|\s*appInfo\.fev_Icon/u
+    );
+  });
+
+  test("does not load the legacy hosted logo in frontend email content", () => {
+    const emailSources = [
+      "src/components/emailbuilder/getConfiguration/sample/request-email.ts",
+      "src/components/emailbuilder/getConfiguration/sample/completion-email.ts",
+      "src/constant/Utils.js",
+    ];
+
+    for (const sourcePath of emailSources) {
+      const source = fs.readFileSync(path.join(projectRoot, sourcePath), "utf8");
+      assert.doesNotMatch(
+        source,
+        /qikinnovation\.ams3\.digitaloceanspaces\.com\/logo\.png/iu,
+        `legacy hosted logo in frontend email content: ${sourcePath}`
+      );
+      assert.match(
+        source,
+        /xiangtai-logo\.png/u,
+        `missing Xiangtai logo in frontend email content: ${sourcePath}`
       );
     }
   });

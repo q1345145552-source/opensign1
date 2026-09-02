@@ -9,6 +9,7 @@ import {
   getSecureUrl,
   appName,
   serverAppId,
+  brandLogoUrl,
 } from '../../../Utils.js';
 import GenerateCertificate from './GenerateCertificate.js';
 import { pdflibAddPlaceholder } from '@signpdf/placeholder-pdf-lib';
@@ -150,7 +151,7 @@ async function sendNotifyMail(doc, signUser, mailProvider, publicUrl) {
   try {
     const TenantAppName = appName;
     const logo =
-      "<img src='https://qikinnovation.ams3.digitaloceanspaces.com/logo.png' height='50' style='padding:20px'/>";
+      `<img src='${brandLogoUrl(publicUrl)}' height='50' style='padding:20px'/>`;
 
     const auditTrailCount =
       doc?.AuditTrail?.filter(x => COMPLETION_ACTIVITIES.includes(x.Activity))?.length || 0;
@@ -198,7 +199,7 @@ async function sendCompletedMail(obj) {
   const pdfName = doc.Name;
   const TenantAppName = appName;
   const logo =
-    "<img src='https://qikinnovation.ams3.digitaloceanspaces.com/logo.png' height='50' style='padding:20px'/>";
+    `<img src='${brandLogoUrl(obj.publicUrl)}' height='50' style='padding:20px'/>`;
 
   let signersMail;
   if (doc?.Signers?.length > 0) {
@@ -304,7 +305,7 @@ async function sendCompletedMail(obj) {
 }
 
 // `sendMailsaveCertifcate` is used send completion mail and update complete status of document
-async function sendMailsaveCertifcate(doc, pfx, isCustomMail, mailProvider, filename) {
+async function sendMailsaveCertifcate(doc, pfx, isCustomMail, mailProvider, filename, publicUrl) {
   const certificate = await GenerateCertificate(doc);
   const certificatePdf = await PDFDocument.load(certificate);
   const P12Buffer = fs.readFileSync(pfx.name);
@@ -335,7 +336,7 @@ async function sendMailsaveCertifcate(doc, pfx, isCustomMail, mailProvider, file
   if (doc.IsSendMail === false) {
     console.log("don't send mail");
   } else {
-    sendCompletedMail({ isCustomMail, doc, mailProvider, filename });
+    sendCompletedMail({ isCustomMail, doc, mailProvider, filename, publicUrl });
   }
   saveFileUsage(CertificateBuffer.length, file.imageUrl, doc?.CreatedBy?.objectId);
   unlinkFile(pfx.name);
@@ -544,7 +545,14 @@ async function PDF(req) {
           if (hashForDoc) {
             doc.DocumentHash = hashForDoc;
           }
-          sendMailsaveCertifcate(doc, pfx, isCustomMail, mailProvider, `signed_${name}`);
+          sendMailsaveCertifcate(
+            doc,
+            pfx,
+            isCustomMail,
+            mailProvider,
+            `signed_${name}`,
+            publicUrl
+          );
         } else {
           unlinkFile(pfxname);
         }

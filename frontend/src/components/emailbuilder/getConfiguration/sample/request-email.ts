@@ -3,7 +3,8 @@ import { TEditorConfiguration } from "../../documents/editor/core";
 const getRequestEmail = (
 ): TEditorConfiguration => {
   const appName =
-    "OpenSign™";
+    "湘泰出海";
+  const brandLogoUrl = new URL("/xiangtai-logo.png", window.location.origin).href;
 
   const logoBlock =
         {
@@ -16,7 +17,7 @@ const getRequestEmail = (
               props: {
                 width: null,
                 height: 50,
-                url: "https://qikinnovation.ams3.digitaloceanspaces.com/logo.png",
+                url: brandLogoUrl,
                 alt: "logo",
                 linkHref: null,
                 contentAlignment: "middle"

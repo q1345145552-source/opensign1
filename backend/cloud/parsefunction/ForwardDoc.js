@@ -1,4 +1,4 @@
-import { appName } from '../../Utils.js';
+import { appName, brandLogoUrl } from '../../Utils.js';
 import sendMailWithAttachment from './sendMailWithAttachment.js';
 
 export default async function forwardDoc(request) {
@@ -31,11 +31,12 @@ export default async function forwardDoc(request) {
       const from = _docRes?.SenderName || _docRes?.ExtUserPtr?.Email;
       const replyTo = _docRes?.SenderMail || _docRes?.ExtUserPtr?.Email;
       const senderName = _docRes?.SenderName || _docRes?.ExtUserPtr?.Name;
+      const publicUrl = request.headers.public_url;
 
       try {
         let mailRes;
         for (let i = 0; i < recipients.length; i++) {
-          const logo = `<img src='https://qikinnovation.ams3.digitaloceanspaces.com/logo.png' height='50' style='padding:20px'/>`;
+          const logo = `<img src='${brandLogoUrl(publicUrl)}' height='50' style='padding:20px'/>`;
 
           const themeColor = '#47a3ad';
 

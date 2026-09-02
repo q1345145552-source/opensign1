@@ -42,7 +42,10 @@ async function sendOtp(email) {
   const { default: sendMailOTPv1 } = await import(
     `../cloud/parsefunction/SendMailOTPv1.js?brand-test=${Date.now()}`
   );
-  await sendMailOTPv1({ params: { email } });
+  await sendMailOTPv1({
+    params: { email },
+    headers: { public_url: 'https://sign.example.com' },
+  });
 
   return { sentMail, createdOtp };
 }
@@ -53,6 +56,10 @@ test('OTP email contains only Xiangtai branding', async () => {
   assert.equal(sentMail.sender, '湘泰出海 <sender@example.com>');
   assert.equal(sentMail.subject, '你的湘泰出海验证码是');
   assert.match(sentMail.html, /湘泰出海验证码/);
+  assert.match(
+    sentMail.html,
+    /<img[^>]+src=['"]https:\/\/sign\.example\.com\/xiangtai-logo\.png['"]/i
+  );
   assert.doesNotMatch(sentMail.html, /OpenSign/i);
 });
 

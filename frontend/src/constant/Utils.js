@@ -2591,7 +2591,7 @@ export const embedWidgetsToDoc = async (
   } else {
     return {
       error:
-        "This pdf is not compatible with opensign please contact <support@opensignlabs.com>"
+        "This pdf is not compatible with 湘泰出海 please contact <support@opensignlabs.com>"
     };
   }
 };
@@ -4222,7 +4222,8 @@ function _removeWidgetAnnotations(pdfDoc) {
 
 export const mailTemplate = (param) => {
   const appName = "湘泰出海";
-  const logo = `<div style='padding:10px'><img src='https://qikinnovation.ams3.digitaloceanspaces.com/logo.png' height='50' /></div>`;
+  const brandLogoUrl = new URL("/xiangtai-logo.png", window.location.origin).href;
+  const logo = `<div style='padding:10px'><img src='${brandLogoUrl}' height='50' /></div>`;
 
   const subject = `${param.senderName} has requested you to sign "${param.title}"`;
   const body =

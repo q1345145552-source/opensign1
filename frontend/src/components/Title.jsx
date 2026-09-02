@@ -2,6 +2,7 @@ import { useLocation, matchPath } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useMemo } from "react";
 import { useManifestUrl } from "../hook/useManifestUrl";
+import { appInfo } from "../constant/appinfo";
 
 const TITLE_MAP = {
   "/": "login",
@@ -59,7 +60,10 @@ export default function Title() {
   const { t } = useTranslation();
   const appName =
     "湘泰出海";
-  const logo = useMemo(() => localStorage.getItem("favicon"), []);
+  const logo = useMemo(
+    () => localStorage.getItem("favicon") || appInfo.fev_Icon,
+    []
+  );
   const prefix = useMemo(
     () => resolveTitle(pathname, state?.title),
     [pathname, state?.title]

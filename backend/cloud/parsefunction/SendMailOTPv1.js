@@ -1,4 +1,4 @@
-import { smtpenable, updateMailCount } from '../../Utils.js';
+import { brandLogoUrl, smtpenable, updateMailCount } from '../../Utils.js';
 async function getDocument(docId) {
   try {
     const query = new Parse.Query('contracts_Document');
@@ -27,6 +27,7 @@ async function sendMailOTPv1(request) {
     if (email) {
       const recipient = email;
       const emailBrandName = '湘泰出海';
+      const logoUrl = brandLogoUrl(request.headers?.public_url);
       const mailsender = smtpenable ? process.env.SMTP_USER_EMAIL : process.env.MAILGUN_SENDER;
       try {
         await Parse.Cloud.sendEmail({
@@ -35,7 +36,7 @@ async function sendMailOTPv1(request) {
           subject: '你的湘泰出海验证码是',
           text: `你的${emailBrandName}验证码是：${code}`,
           html:
-            `<html><head><meta http-equiv='Content-Type' content='text/html;charset=UTF-8' /></head><body><div style='background-color:#f5f5f5;padding:20px'><div style='background-color:white;'><div style='background-color:red;padding:2px;font-family:system-ui;background-color:#47a3ad;'><p style='font-size:20px;font-weight:400;color:white;padding-left:20px;'>湘泰出海验证码</p></div><div style='padding:20px;'><p style='font-family:system-ui;font-size:14px;'>你的湘泰出海验证码是：</p><p style='text-decoration:none;font-weight:bolder;color:blue;font-size:45px;margin:20px;'>` +
+            `<html><head><meta http-equiv='Content-Type' content='text/html;charset=UTF-8' /></head><body><div style='background-color:#f5f5f5;padding:20px'><div style='background-color:white;'><div style='padding:20px'><img src='${logoUrl}' height='50' alt='湘泰出海'/></div><div style='background-color:red;padding:2px;font-family:system-ui;background-color:#47a3ad;'><p style='font-size:20px;font-weight:400;color:white;padding-left:20px;'>湘泰出海验证码</p></div><div style='padding:20px;'><p style='font-family:system-ui;font-size:14px;'>你的湘泰出海验证码是：</p><p style='text-decoration:none;font-weight:bolder;color:blue;font-size:45px;margin:20px;'>` +
             code +
             '</p></div></div></div></body></html>',
         });

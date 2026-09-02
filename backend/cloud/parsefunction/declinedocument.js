@@ -1,11 +1,11 @@
-import { appName } from '../../Utils.js';
+import { appName, brandLogoUrl } from '../../Utils.js';
 import sendSystemMail from './sendSystemMail.js';
 
 async function sendDeclineMail(doc, publicUrl, userId, reason) {
   try {
     const TenantAppName = appName;
     const logo =
-      "<img src='https://qikinnovation.ams3.digitaloceanspaces.com/logo.png' height='50' style='padding:20px'/>";
+      `<img src='${brandLogoUrl(publicUrl)}' height='50' style='padding:20px'/>`;
 
     const removePrefill =
       doc?.Placeholders?.length > 0 && doc?.Placeholders?.filter(x => x?.Role !== 'prefill');
