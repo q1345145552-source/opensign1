@@ -8,16 +8,6 @@ const SocialMedia = () => {
   return (
     <React.Fragment>
       <NavLink
-        to="https://github.com/opensignlabs/opensign"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        <i aria-hidden="true" className="fa-brands fa-github"></i>
-        <span className="fa-sr-only">
-          湘泰出海&apos;s {t("social-media.github")}
-        </span>
-      </NavLink>
-      <NavLink
         to="https://www.linkedin.com/company/opensign%E2%84%A2/"
         target="_blank"
         rel="noopener noreferrer"
@@ -35,16 +25,6 @@ const SocialMedia = () => {
         <i aria-hidden="true" className="fa-brands fa-square-x-twitter"></i>
         <span className="fa-sr-only">
           湘泰出海&apos;s {t("social-media.twitter")}
-        </span>
-      </NavLink>
-      <NavLink
-        to="https://discord.com/invite/xe9TDuyAyj"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        <i aria-hidden="true" className="fa-brands fa-discord"></i>
-        <span className="fa-sr-only">
-          湘泰出海&apos;s {t("social-media.discord")}
         </span>
       </NavLink>
     </React.Fragment>
