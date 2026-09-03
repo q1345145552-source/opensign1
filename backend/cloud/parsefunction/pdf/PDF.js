@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import axios from 'axios';
+import sharp from 'sharp';
 import { PDFDocument } from 'pdf-lib';
 import {
   cloudServerUrl,
@@ -16,6 +17,7 @@ import { pdflibAddPlaceholder } from '@signpdf/placeholder-pdf-lib';
 import { Placeholder } from './Placeholder.js';
 import { SignPdf } from '@signpdf/signpdf';
 import { P12Signer } from '@signpdf/signer-p12';
+import { presignedlocalUrl } from '../getSignedUrl.js';
 import { buildDownloadFilename, parseUploadFile } from '../../../utils/fileUtils.js';
 import sendMailWithAttachment from '../sendMailWithAttachment.js';
 import sendSystemMail from '../sendSystemMail.js';
@@ -344,6 +346,104 @@ async function sendMailsaveCertifcate(doc, pfx, isCustomMail, mailProvider, file
 }
 
 /**
+ * 获取文档发起人（公司）上传的公司章图片 URL。
+ * 公司章保存在 contracts_Signature 的 Stamp 字段，通过 UserId 关联用户。
+ */
+async function fetchOwnerStampUrl(_resDoc) {
+  try {
+    const ownerUserId = _resDoc?.CreatedBy?.objectId || _resDoc?.ExtUserPtr?.UserId?.objectId;
+    if (!ownerUserId) return null;
+    const q = new Parse.Query('contracts_Signature');
+    q.equalTo('UserId', { __type: 'Pointer', className: '_User', objectId: ownerUserId });
+    q.exists('Stamp');
+    q.notEqualTo('Stamp', '');
+    q.descending('updatedAt');
+    const rec = await q.first({ useMasterKey: true });
+    return rec ? rec.get('Stamp') : null;
+  } catch (err) {
+    console.log('骑缝章: 查询公司章失败', err.message);
+    return null;
+  }
+}
+
+/**
+ * 下载公司章图片并返回 Buffer。
+ * 本地文件 URL 会重新签名后再下载，避免 token 过期。
+ */
+async function downloadStampImage(rawUrl) {
+  if (!rawUrl) return null;
+  try {
+    if (rawUrl.includes('/files/')) {
+      const base = rawUrl.split('?')[0];
+      const idx = base.indexOf('/files/');
+      const rel = base.slice(idx); // /files/<appId>/<filename>
+      const internalUrl = `${cloudServerUrl}${rel}`;
+      const signedUrl = presignedlocalUrl(internalUrl);
+      const resp = await axios.get(signedUrl, { responseType: 'arraybuffer', timeout: 30000 });
+      return Buffer.from(resp.data);
+    }
+    const resp = await axios.get(rawUrl, { responseType: 'arraybuffer', timeout: 30000 });
+    return Buffer.from(resp.data);
+  } catch (err) {
+    console.log('骑缝章: 下载公司章失败', err.message);
+    return null;
+  }
+}
+
+/**
+ * 骑缝章：把公司章盖在所有页的装订侧（左侧）边缘。
+ * 章按上下切成两半，奇数页盖上半，偶数页盖下半，
+ * 这样相邻两页的边缘拼起来是一个完整的章。
+ */
+async function applyPagingSeal(pdfDoc, _resDoc) {
+  try {
+    const stampUrl = await fetchOwnerStampUrl(_resDoc);
+    if (!stampUrl) {
+      console.log('骑缝章: 未找到公司章，跳过');
+      return;
+    }
+    const imgBuffer = await downloadStampImage(stampUrl);
+    if (!imgBuffer) return;
+
+    const meta = await sharp(imgBuffer).metadata();
+    const w = meta.width;
+    const h = meta.height;
+    if (!w || !h) return;
+
+    const topH = Math.floor(h / 2);
+    const bottomH = h - topH;
+    const topHalf = await sharp(imgBuffer)
+      .extract({ left: 0, top: 0, width: w, height: topH })
+      .png()
+      .toBuffer();
+    const bottomHalf = await sharp(imgBuffer)
+      .extract({ left: 0, top: topH, width: w, height: bottomH })
+      .png()
+      .toBuffer();
+
+    const topImg = await pdfDoc.embedPng(topHalf);
+    const bottomImg = await pdfDoc.embedPng(bottomHalf);
+
+    // 章宽固定，高度按原图比例算，保证不变形
+    const sealWidth = 100;
+    const halfHeightPt = (sealWidth * h) / (2 * w);
+
+    const pages = pdfDoc.getPages();
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
+      const { height: pageHeight } = page.getSize();
+      const isTop = i % 2 === 0;
+      const img = isTop ? topImg : bottomImg;
+      const y = isTop ? pageHeight / 2 : pageHeight / 2 - halfHeightPt;
+      page.drawImage(img, { x: 0, y, width: sealWidth, height: halfHeightPt });
+    }
+    console.log(`骑缝章: 已在 ${pages.length} 页盖上公司章`);
+  } catch (err) {
+    console.log('骑缝章: 盖章失败', err.message);
+  }
+}
+
+/**
  * Process a PDF for signing:
  * - updates audit trail, generates certificate.
  * - Optionally inserts a signature placeholder (Placeholder()).
@@ -365,6 +465,8 @@ async function processPdf(_resDoc, PdfBuffer, reason) {
   form.updateFieldAppearances();
   // Flattens the form, converting all form fields into non-editable, static content
   form.flatten();
+  // 骑缝章：签章完成时把公司章盖在所有页的装订侧边缘
+  await applyPagingSeal(pdfDoc, _resDoc);
   Placeholder({
     pdfDoc: pdfDoc,
     reason: `Digitally signed by ${eSignName} for ${reason}`,
