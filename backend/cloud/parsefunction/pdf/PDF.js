@@ -406,34 +406,29 @@ async function applyPagingSeal(pdfDoc, _resDoc) {
     const h = meta.height;
     if (!w || !h) return;
 
-    const topH = Math.floor(h / 2);
-    const bottomH = h - topH;
-    const topHalf = await sharp(imgBuffer)
-      .extract({ left: 0, top: 0, width: w, height: topH })
-      .png()
-      .toBuffer();
-    const bottomHalf = await sharp(imgBuffer)
-      .extract({ left: 0, top: topH, width: w, height: bottomH })
-      .png()
-      .toBuffer();
-
-    const topImg = await pdfDoc.embedPng(topHalf);
-    const bottomImg = await pdfDoc.embedPng(bottomHalf);
-
-    // 章宽固定，高度按原图比例算，保证不变形
-    const sealWidth = 100;
-    const halfHeightPt = (sealWidth * h) / (2 * w);
-
     const pages = pdfDoc.getPages();
-    for (let i = 0; i < pages.length; i++) {
+    const sliceCount = pages.length;
+    const sealWidth = 100;
+
+    // 把章按总页数横向切成等份，第 i 页盖第 i 份（从上往下），盖在最右边
+    for (let i = 0; i < sliceCount; i++) {
+      const top = Math.floor((i * h) / sliceCount);
+      const bottom = Math.floor(((i + 1) * h) / sliceCount);
+      const sliceH = bottom - top;
+      if (sliceH <= 0) continue;
+      const slice = await sharp(imgBuffer)
+        .extract({ left: 0, top, width: w, height: sliceH })
+        .png()
+        .toBuffer();
+      const sliceImg = await pdfDoc.embedPng(slice);
+      const sliceHeightPt = (sealWidth * sliceH) / w;
       const page = pages[i];
-      const { height: pageHeight } = page.getSize();
-      const isTop = i % 2 === 0;
-      const img = isTop ? topImg : bottomImg;
-      const y = isTop ? pageHeight / 2 : pageHeight / 2 - halfHeightPt;
-      page.drawImage(img, { x: 0, y, width: sealWidth, height: halfHeightPt });
+      const { width: pageWidth, height: pageHeight } = page.getSize();
+      const x = pageWidth - sealWidth;
+      const y = (pageHeight - sliceHeightPt) / 2;
+      page.drawImage(sliceImg, { x, y, width: sealWidth, height: sliceHeightPt });
     }
-    console.log(`骑缝章: 已在 ${pages.length} 页盖上公司章`);
+    console.log(`骑缝章: 已在 ${sliceCount} 页盖上公司章`);
   } catch (err) {
     console.log('骑缝章: 盖章失败', err.message);
   }
