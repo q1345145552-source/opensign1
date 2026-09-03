@@ -1,7 +1,10 @@
 FROM opensign/opensignserver:main@sha256:cadfcaaa20bf40272aed43c91314362c1dac034b2a4651f50e5288d01c2b434d
 
-# Keep Chinese text available when office documents are converted to PDF.
-RUN apt-get update && apt-get install -y -qq fonts-noto-cjk && fc-cache -f && rm -rf /var/lib/apt/lists/*
+# 安装中文字体和泰文字体 让 Word 转 PDF 时中文和泰文都能正常显示
+RUN apt-get update && apt-get install -y -qq fonts-noto-cjk fonts-noto-extra && fc-cache -f && rm -rf /var/lib/apt/lists/*
 
 COPY backend/cloud/parsefunction/SendMailOTPv1.js /usr/src/app/cloud/parsefunction/SendMailOTPv1.js
 COPY backend/cloud/parsefunction/VerifyEmail.js /usr/src/app/cloud/parsefunction/VerifyEmail.js
+COPY backend/cloud/parsefunction/pdf/GenerateCertificate.js /usr/src/app/cloud/parsefunction/pdf/GenerateCertificate.js
+COPY backend/cloud/parsefunction/reportsJson.js /usr/src/app/cloud/parsefunction/reportsJson.js
+COPY backend/font/NotoSansSC-Regular.otf /usr/src/app/font/NotoSansSC-Regular.otf
