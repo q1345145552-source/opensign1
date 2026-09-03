@@ -368,17 +368,13 @@ async function fetchOwnerStampUrl(_resDoc) {
 
 /**
  * 下载公司章图片并返回 Buffer。
- * 本地文件 URL 会重新签名后再下载，避免 token 过期。
+ * 本地文件 URL 用外部地址重新签名后再下载，避免 token 过期和地址不匹配。
  */
 async function downloadStampImage(rawUrl) {
   if (!rawUrl) return null;
   try {
     if (rawUrl.includes('/files/')) {
-      const base = rawUrl.split('?')[0];
-      const idx = base.indexOf('/files/');
-      const rel = base.slice(idx); // /files/<appId>/<filename>
-      const internalUrl = `${cloudServerUrl}${rel}`;
-      const signedUrl = presignedlocalUrl(internalUrl);
+      const signedUrl = presignedlocalUrl(rawUrl);
       const resp = await axios.get(signedUrl, { responseType: 'arraybuffer', timeout: 30000 });
       return Buffer.from(resp.data);
     }
