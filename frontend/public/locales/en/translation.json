@@ -1613,5 +1613,7 @@
   "access-code-upgrade-msg": "Access codes are available on paid plans only. Upgrade your plan to add access codes for recipients.",
   "show-access-code": "Show access code",
   "hide-access-code": "Hide access code",
-  "already-copied-to-clipboard": "Already copied to clipboard"
+  "already-copied-to-clipboard": "Already copied to clipboard",
+  "paging-seal": "Paging seal (stamp company seal across all pages)",
+  "paging-seal-help": "Stamp the company seal across the binding edge of every page to prevent page replacement"
 }

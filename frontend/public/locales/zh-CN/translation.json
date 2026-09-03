@@ -1613,5 +1613,7 @@
   "access-code-upgrade-msg": "访问代码仅在付费套餐中可用。升级您的套餐即可为接收人添加访问代码。",
   "show-access-code": "显示访问代码",
   "hide-access-code": "隐藏访问代码",
-  "already-copied-to-clipboard": "已复制到剪贴板"
+  "already-copied-to-clipboard": "已复制到剪贴板",
+  "paging-seal": "骑缝章（公司章盖在所有页装订侧）",
+  "paging-seal-help": "把公司章盖在所有页的装订侧边缘 防止抽换页"
 }

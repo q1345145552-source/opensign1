@@ -76,7 +76,8 @@ const Forms = (props) => {
     Bcc: [],
     Cc: [],
     RedirectUrl: "",
-    AllowModifications: false
+    AllowModifications: false,
+    IsPagingSeal: "false"
   });
   const [fileupload, setFileUpload] = useState("");
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -443,6 +444,7 @@ const Forms = (props) => {
           object.set("IsTourEnabled", isTourEnabled);
           object.set("TimeToCompleteDays", TimeToCompleteDays);
           object.set("PenColors", selectedColors);
+          object.set("IsPagingSeal", formData.IsPagingSeal === "true");
 
             object.set("AllowModifications", false);
             object.set("IsEnableOTP", false);
@@ -527,6 +529,7 @@ const Forms = (props) => {
             IsTourEnabled: istourenabled,
             RedirectUrl: "",
             AllowModifications: false,
+            IsPagingSeal: "false"
           });
           setFileUpload("");
           setSelectedFiles([]);
@@ -1148,6 +1151,29 @@ const Forms = (props) => {
                               </div>
                             )}
                           </div>
+                          {props.title === "Request Signatures" && (
+                            <div className="text-xs mt-3">
+                              <div className="flex items-center gap-2 ml-2 mb-1">
+                                <input
+                                  type="checkbox"
+                                  className="op-checkbox op-checkbox-xs"
+                                  name="IsPagingSeal"
+                                  checked={formData.IsPagingSeal === "true"}
+                                  onChange={(e) =>
+                                    setFormData({
+                                      ...formData,
+                                      IsPagingSeal: e.target.checked
+                                        ? "true"
+                                        : "false"
+                                    })
+                                  }
+                                />
+                                <span title={t("paging-seal-help")}>
+                                  {t("paging-seal")}
+                                </span>
+                              </div>
+                            </div>
+                          )}
                         </>
                       )}
                       <div className="overflow-y-auto z-[40] transition-all">

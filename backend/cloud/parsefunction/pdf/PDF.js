@@ -465,8 +465,10 @@ async function processPdf(_resDoc, PdfBuffer, reason) {
   form.updateFieldAppearances();
   // Flattens the form, converting all form fields into non-editable, static content
   form.flatten();
-  // 骑缝章：签章完成时把公司章盖在所有页的装订侧边缘
-  await applyPagingSeal(pdfDoc, _resDoc);
+  // 骑缝章：仅当文档勾选了骑缝章时才把公司章盖在所有页的装订侧边缘
+  if (_resDoc?.IsPagingSeal === true) {
+    await applyPagingSeal(pdfDoc, _resDoc);
+  }
   Placeholder({
     pdfDoc: pdfDoc,
     reason: `Digitally signed by ${eSignName} for ${reason}`,
