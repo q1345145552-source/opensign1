@@ -409,24 +409,25 @@ async function applyPagingSeal(pdfDoc, _resDoc) {
     const pages = pdfDoc.getPages();
     const sliceCount = pages.length;
     const sealWidth = 100;
+    const sealHeightPt = (sealWidth * h) / w;
 
-    // 把章按总页数横向切成等份，第 i 页盖第 i 份（从上往下），盖在最右边
+    // 把章按总页数竖向切成等份，第 i 页盖第 i 份（从左到右），盖在最右边
     for (let i = 0; i < sliceCount; i++) {
-      const top = Math.floor((i * h) / sliceCount);
-      const bottom = Math.floor(((i + 1) * h) / sliceCount);
-      const sliceH = bottom - top;
-      if (sliceH <= 0) continue;
+      const left = Math.floor((i * w) / sliceCount);
+      const right = Math.floor(((i + 1) * w) / sliceCount);
+      const sliceW = right - left;
+      if (sliceW <= 0) continue;
       const slice = await sharp(imgBuffer)
-        .extract({ left: 0, top, width: w, height: sliceH })
+        .extract({ left, top: 0, width: sliceW, height: h })
         .png()
         .toBuffer();
       const sliceImg = await pdfDoc.embedPng(slice);
-      const sliceHeightPt = (sealWidth * sliceH) / w;
+      const sliceWidthPt = (sealWidth * sliceW) / w;
       const page = pages[i];
       const { width: pageWidth, height: pageHeight } = page.getSize();
-      const x = pageWidth - sealWidth;
-      const y = (pageHeight - sliceHeightPt) / 2;
-      page.drawImage(sliceImg, { x, y, width: sealWidth, height: sliceHeightPt });
+      const x = pageWidth - sealWidth + (left / w) * sealWidth;
+      const y = (pageHeight - sealHeightPt) / 2;
+      page.drawImage(sliceImg, { x, y, width: sliceWidthPt, height: sealHeightPt });
     }
     console.log(`骑缝章: 已在 ${sliceCount} 页盖上公司章`);
   } catch (err) {
