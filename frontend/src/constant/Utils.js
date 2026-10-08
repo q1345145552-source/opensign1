@@ -1513,10 +1513,8 @@ export const addInitialData = (signerPos, setXyPosition, value, userId) => {
 //function for embed document id
 export const embedDocId = async (pdfOriginalWH, pdfDoc, documentId) => {
   const appName = "湘泰出海";
-  // `fontBytes` is used to embed custom font in pdf
-  const fontBytes = await fileasbytes(
-    "https://cdn.opensignlabs.com/webfonts/times.ttf"
-  );
+  // 用中文字体画水印，让"湘泰出海"能正常显示
+  const fontBytes = await getCjkFontBytes();
   pdfDoc.registerFontkit(fontkit);
   const font = await pdfDoc.embedFont(fontBytes, { subset: true });
   //pdfOriginalWH contained all pdf's pages width and height
