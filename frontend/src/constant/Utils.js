@@ -179,7 +179,18 @@ export const fileasbytes = async (filepath) => {
 let _cjkFontBytes = null;
 export const getCjkFontBytes = async () => {
   if (!_cjkFontBytes) {
-    _cjkFontBytes = await fileasbytes("/fonts/NotoSansSC-Regular.otf");
+    try {
+      _cjkFontBytes = await fileasbytes("/fonts/NotoSansSC-Regular.otf");
+    } catch (err) {
+      console.log("中文字体加载失败，回退到英文字体:", err?.message || err);
+      try {
+        _cjkFontBytes = await fileasbytes(
+          "https://cdn.opensignlabs.com/webfonts/times.ttf"
+        );
+      } catch (e2) {
+        _cjkFontBytes = null;
+      }
+    }
   }
   return _cjkFontBytes;
 };
