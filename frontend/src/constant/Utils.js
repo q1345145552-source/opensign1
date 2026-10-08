@@ -175,6 +175,15 @@ export const fileasbytes = async (filepath) => {
   return new Uint8Array(arrayBuffer);
 };
 
+// 中文字体缓存，用于签署时把文字字段画到 PDF 上（支持中文和英文）
+let _cjkFontBytes = null;
+export const getCjkFontBytes = async () => {
+  if (!_cjkFontBytes) {
+    _cjkFontBytes = await fileasbytes("/fonts/NotoSansSC-Regular.otf");
+  }
+  return _cjkFontBytes;
+};
+
 export const openInNewTab = (url, target) => {
   if (target) {
     window.open(url, target, "noopener,noreferrer");
@@ -2050,10 +2059,8 @@ export const embedWidgetsToDoc = async (
   scale,
   prefillImg
 ) => {
-  // `fontBytes` is used to embed custom font in pdf
-  const fontBytes = await fileasbytes(
-    "https://cdn.opensignlabs.com/webfonts/times.ttf"
-  );
+  // 用中文字体渲染文字字段，支持中文和英文
+  const fontBytes = await getCjkFontBytes();
   pdfDoc.registerFontkit(fontkit);
   const font = await pdfDoc.embedFont(fontBytes, { subset: true });
   let hasError = false;
@@ -3744,6 +3751,9 @@ export const flattenPdf = async (pdfFile) => {
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const zapf = await pdfDoc.embedFont(StandardFonts.ZapfDingbats);
+  // 中文字体，用于文字字段，让中文和英文都能正常显示
+  pdfDoc.registerFontkit(fontkit);
+  const cjkFont = await pdfDoc.embedFont(await getCjkFontBytes(), { subset: true });
 
   const fields = form.getFields();
 
@@ -3765,15 +3775,15 @@ export const flattenPdf = async (pdfFile) => {
       _drawWidgetBox(page, rect);
 
       if (type === "PDFTextField") {
-        _drawTextField(page, field, rect, helvetica);
+        _drawTextField(page, field, rect, cjkFont);
       } else if (type === "PDFCheckBox") {
         _drawCheckBox(page, field, rect, zapf);
       } else if (type === "PDFRadioGroup") {
         _drawRadioGroup(page, field, widget, rect);
       } else if (type === "PDFDropdown") {
-        _drawDropdown(page, field, rect, helvetica);
+        _drawDropdown(page, field, rect, cjkFont);
       } else if (type === "PDFOptionList") {
-        _drawOptionList(page, field, rect, helvetica);
+        _drawOptionList(page, field, rect, cjkFont);
       } else if (type === "PDFButton") {
         // Push buttons are interactive controls, not meaningful data fields.
       }
