@@ -2068,10 +2068,51 @@ export const embedWidgetsToDoc = async (
   scale,
   prefillImg
 ) => {
-  // 用中文字体渲染文字字段，支持中文和英文
-  const fontBytes = await getCjkFontBytes();
-  pdfDoc.registerFontkit(fontkit);
-  const font = await pdfDoc.embedFont(fontBytes, { subset: true });
+  // 用中文字体渲染文字字段，支持中文和英文。
+  // 只有当存在真正需要绘制文字/下拉/单选/复选的控件时才嵌入字体：
+  // 若签署人只有签名/印章等图片控件，嵌入后没有任何字形被使用，
+  // fontkit 在保存空的 CFF 子集时会抛 RangeError，导致签署失败。
+  const textTypesNeedFont = [
+    textWidget,
+    textInputWidget,
+    cellsWidget,
+    "name",
+    "company",
+    "job title",
+    "date",
+    "email",
+    "checkbox",
+    "dropdown",
+    radioButtonWidget
+  ];
+  let font = null;
+  let hasTextWidget = false;
+  for (let item of widgets) {
+    const typeExist = item.pos.some((data) => data?.type);
+    let kept;
+    if (typeExist) {
+      kept = signyourself
+        ? item.pos
+        : item.pos.filter(
+            (data) =>
+              data?.options?.SignUrl ||
+              !isEmptyValue(data?.options?.defaultValue) ||
+              !isEmptyValue(data?.options?.response) ||
+              data?.type === "checkbox" ||
+              data?.type === radioButtonWidget
+          );
+    } else {
+      kept = item.pos;
+    }
+    if (kept.some((w) => textTypesNeedFont.includes(w.type))) {
+      hasTextWidget = true;
+      break;
+    }
+  }
+  if (hasTextWidget) {
+    pdfDoc.registerFontkit(fontkit);
+    font = await pdfDoc.embedFont(await getCjkFontBytes(), { subset: true });
+  }
   let hasError = false;
   for (let item of widgets) {
     if (hasError) break; // Stop the outer loop if an error occurred
@@ -3760,11 +3801,23 @@ export const flattenPdf = async (pdfFile) => {
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const zapf = await pdfDoc.embedFont(StandardFonts.ZapfDingbats);
-  // 中文字体，用于文字字段，让中文和英文都能正常显示
-  pdfDoc.registerFontkit(fontkit);
-  const cjkFont = await pdfDoc.embedFont(await getCjkFontBytes(), { subset: true });
 
   const fields = form.getFields();
+
+  // 中文字体，用于文字字段，让中文和英文都能正常显示。
+  // 仅当存在文字/下拉/选项列表控件时才嵌入，否则空 CFF 子集会在保存时抛错。
+  const needsCjkFont = fields.some((f) =>
+    ["PDFTextField", "PDFDropdown", "PDFOptionList"].includes(
+      f.constructor.name
+    )
+  );
+  let cjkFont = null;
+  if (needsCjkFont) {
+    pdfDoc.registerFontkit(fontkit);
+    cjkFont = await pdfDoc.embedFont(await getCjkFontBytes(), {
+      subset: true
+    });
+  }
 
   for (const field of fields) {
     const type = field.constructor.name;
