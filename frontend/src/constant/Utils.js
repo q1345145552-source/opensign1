@@ -180,7 +180,7 @@ let _cjkFontBytes = null;
 export const getCjkFontBytes = async () => {
   if (!_cjkFontBytes) {
     try {
-      _cjkFontBytes = await fileasbytes("/fonts/NotoSansSC-Regular.otf");
+      _cjkFontBytes = await fileasbytes("/fonts/NotoSansSC-Regular.ttf");
     } catch (err) {
       console.log("中文字体加载失败，回退到英文字体:", err?.message || err);
       try {
